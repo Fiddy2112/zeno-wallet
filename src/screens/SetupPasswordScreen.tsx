@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 
-import type { Screen } from "~popup"
+import type { Screen } from "~types"
 
 interface Props {
   setScreen: (s: Screen) => void

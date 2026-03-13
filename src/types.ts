@@ -1,0 +1,11 @@
+export type Screen =
+  | "welcome"
+  | "setup-pass"
+  | "seed-phrase"
+  | "import"
+  | "dashboard"
+  | "send"
+  | "receive"
+  | "swap"
+  | "ai"
+  | "settings"

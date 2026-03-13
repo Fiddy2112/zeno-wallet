@@ -1,6 +1,6 @@
 import React from "react"
 
-import type { Screen } from "~popup"
+import type { Screen } from "~types"
 
 type Tab = "dashboard" | "send" | "receive" | "ai" | "settings"
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 
 import { AIMessage, type Message } from "~components/AIMessage"
-import type { Screen } from "~popup"
+import type { Screen } from "~types"
 
 interface Props {
   setScreen: (s: Screen) => void

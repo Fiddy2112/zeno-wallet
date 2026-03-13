@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react"
 import type { Token } from "~components/TokenCard"
 import { TokenCard } from "~components/TokenCard"
 import { useDashboardTour } from "~features/useDashboardTour"
-import type { Screen } from "~popup"
+import type { Screen } from "~types"
 
 interface Props {
   setScreen: (s: Screen) => void

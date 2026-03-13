@@ -13,18 +13,7 @@ import { SettingsScreen } from "~screens/SettingsScreen"
 import { SetupPasswordScreen } from "~screens/SetupPasswordScreen"
 import { SwapScreen } from "~screens/SwapScreen"
 import { WelcomeScreen } from "~screens/WelcomeScreen"
-
-export type Screen =
-  | "welcome"
-  | "setup-pass"
-  | "seed-phrase"
-  | "import"
-  | "dashboard"
-  | "send"
-  | "receive"
-  | "swap"
-  | "ai"
-  | "settings"
+import type { Screen } from "~types"
 
 const MAIN_SCREENS: Screen[] = [
   "dashboard",
