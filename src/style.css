@@ -70,3 +70,116 @@ body,
     animation: shimmer 2s linear infinite;
   }
 }
+
+/* ── Driver.js Tour Theme ───────────────── */
+.zeno-tour-popover.driver-popover {
+  background: rgba(12, 12, 14, 0.96) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 24px 48px rgba(0, 0, 0, 0.8) !important;
+  color: #fff !important;
+  font-family: "Inter", system-ui, sans-serif !important;
+  min-width: 260px !important;
+  max-width: 280px !important;
+  padding: 18px 20px 16px !important;
+}
+
+.zeno-tour-popover .driver-popover-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  margin-bottom: 6px !important;
+  letter-spacing: -0.01em !important;
+}
+
+.zeno-tour-popover .driver-popover-description {
+  font-size: 12px !important;
+  line-height: 1.6 !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+.zeno-tour-popover .driver-popover-description strong {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-weight: 600 !important;
+}
+
+.zeno-tour-popover .driver-popover-progress-text {
+  font-size: 10px !important;
+  color: rgba(255, 255, 255, 0.25) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.05em !important;
+}
+
+.zeno-tour-popover .driver-popover-footer {
+  margin-top: 14px !important;
+  gap: 6px !important;
+}
+
+.zeno-tour-popover .driver-popover-navigation-btns button {
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 6px 14px !important;
+  border-radius: 8px !important;
+  border: none !important;
+  cursor: pointer !important;
+  letter-spacing: 0.03em !important;
+  transition: all 0.15s ease !important;
+}
+
+.zeno-tour-popover .driver-popover-prev-btn {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.zeno-tour-popover .driver-popover-prev-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+.zeno-tour-popover .driver-popover-next-btn,
+.zeno-tour-popover .driver-popover-done-btn {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+.zeno-tour-popover .driver-popover-next-btn:hover,
+.zeno-tour-popover .driver-popover-done-btn:hover {
+  background: rgba(255, 255, 255, 0.88) !important;
+}
+
+.zeno-tour-popover .driver-popover-close-btn {
+  color: rgba(255, 255, 255, 0.25) !important;
+  font-size: 16px !important;
+  top: 12px !important;
+  right: 14px !important;
+}
+
+.zeno-tour-popover .driver-popover-close-btn:hover {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.zeno-tour-popover .driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: rgba(12, 12, 14, 0.96) !important;
+}
+.zeno-tour-popover .driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: rgba(12, 12, 14, 0.96) !important;
+}
+.zeno-tour-popover .driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: rgba(12, 12, 14, 0.96) !important;
+}
+.zeno-tour-popover .driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: rgba(12, 12, 14, 0.96) !important;
+}
+
+/* highlighted element ring */
+.driver-active-element {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.2),
+    0 0 16px rgba(255, 255, 255, 0.06) !important;
+  border-radius: 10px !important;
+}

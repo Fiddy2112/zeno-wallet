@@ -24,6 +24,13 @@ export const BottomNav: React.FC<Props> = ({ active, setScreen }) => (
       return (
         <button
           key={t.id}
+          id={
+            t.id === "ai"
+              ? "tour-nav-ai"
+              : t.id === "settings"
+                ? "tour-nav-settings"
+                : undefined
+          }
           onClick={() => setScreen(t.id)}
           className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 group">
           <span

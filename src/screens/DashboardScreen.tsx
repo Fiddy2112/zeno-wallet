@@ -1,7 +1,8 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 
 import type { Token } from "~components/TokenCard"
 import { TokenCard } from "~components/TokenCard"
+import { useDashboardTour } from "~features/useDashboardTour"
 import type { Screen } from "~popup"
 
 interface Props {
@@ -58,6 +59,15 @@ export const DashboardScreen: React.FC<Props> = ({
   setProMode
 }) => {
   const [copied, setCopied] = useState(false)
+  const { startTour, shouldAutoStart } = useDashboardTour()
+
+  // Auto-start tour for first-time users
+  useEffect(() => {
+    if (shouldAutoStart()) {
+      const t = setTimeout(startTour, 600)
+      return () => clearTimeout(t)
+    }
+  }, [])
 
   const copy = () => {
     navigator.clipboard?.writeText(ADDR)
@@ -70,10 +80,15 @@ export const DashboardScreen: React.FC<Props> = ({
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-white rounded flex items-center justify-center font-black text-black italic text-xs flex-shrink-0">
+          {/* Tour anchor: logo */}
+          <div
+            id="tour-logo"
+            className="w-6 h-6 bg-white rounded flex items-center justify-center font-black text-black italic text-xs flex-shrink-0">
             Z
           </div>
+          {/* Tour anchor: address */}
           <button
+            id="tour-address"
             onClick={copy}
             className="flex items-center gap-1.5 glass px-2.5 py-1 rounded-full hover:bg-white/[0.08] transition-all">
             <span className="text-white/70 text-xs font-mono">
@@ -84,14 +99,17 @@ export const DashboardScreen: React.FC<Props> = ({
             </span>
           </button>
         </div>
+
         <div className="flex items-center gap-2">
-          <div className="glass px-2 py-1 rounded-full">
+          {/* Tour anchor: network */}
+          <div id="tour-network" className="glass px-2 py-1 rounded-full">
             <span className="text-white/50 text-[10px] font-mono">
               Ethereum
             </span>
           </div>
-          {/* Lite/Pro toggle */}
+          {/* Tour anchor: mode toggle */}
           <button
+            id="tour-mode-toggle"
             onClick={() => setProMode(!proMode)}
             className={`text-[10px] font-bold px-2.5 py-1 rounded-full transition-all ${
               proMode
@@ -101,10 +119,18 @@ export const DashboardScreen: React.FC<Props> = ({
             {proMode ? "PRO" : "LITE"}
           </button>
         </div>
+
+        {/* Tour trigger button */}
+        <button
+          onClick={startTour}
+          title="Start guided tour"
+          className="absolute top-3.5 right-14 w-6 h-6 flex items-center justify-center text-white/20 hover:text-white/60 transition-colors text-xs rounded-full border border-white/10 hover:border-white/25">
+          ?
+        </button>
       </div>
 
-      {/* Balance */}
-      <div className="px-4 py-4 text-center flex-shrink-0">
+      {/* Tour anchor: balance */}
+      <div id="tour-balance" className="px-4 py-4 text-center flex-shrink-0">
         <p className="text-white/30 text-xs uppercase tracking-widest mb-1">
           Total Balance
         </p>
@@ -129,8 +155,10 @@ export const DashboardScreen: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="flex justify-center gap-6 px-4 pb-4 flex-shrink-0">
+      {/* Tour anchor: action buttons */}
+      <div
+        id="tour-actions"
+        className="flex justify-center gap-6 px-4 pb-4 flex-shrink-0">
         {(
           [
             { label: "Send", icon: "↑", screen: "send" },
@@ -170,8 +198,8 @@ export const DashboardScreen: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Token list */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
+      {/* Tour anchor: asset list */}
+      <div id="tour-assets" className="flex-1 overflow-y-auto px-2 pb-2">
         <div className="flex items-center justify-between px-3 pb-2">
           <span className="text-white/30 text-[10px] uppercase tracking-widest">
             Assets
