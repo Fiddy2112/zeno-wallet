@@ -28,6 +28,9 @@
   "manifest": {
     "host_permissions": [
       "https://*/*"
-    ]
+    ],
+    "action": {
+      "default_title": "Open Zeno Wallet"
+    }
   }
 }
