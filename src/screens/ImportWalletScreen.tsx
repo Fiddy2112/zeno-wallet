@@ -4,9 +4,15 @@ import type { Screen } from "~types"
 
 interface Props {
   setScreen: (s: Screen) => void
+  setFlow: (f: "create" | "import") => void
+  setImportedPhrase: (p: string) => void
 }
 
-export const ImportWalletScreen: React.FC<Props> = ({ setScreen }) => {
+export const ImportWalletScreen: React.FC<Props> = ({
+  setScreen,
+  setFlow,
+  setImportedPhrase
+}) => {
   const [phrase, setPhrase] = useState("")
   const [error, setError] = useState("")
 
@@ -21,6 +27,8 @@ export const ImportWalletScreen: React.FC<Props> = ({ setScreen }) => {
       return
     }
     localStorage.setItem("zeno_onboarded", "true")
+    setFlow("import")
+    setImportedPhrase(phrase.trim())
     setScreen("setup-pass")
   }
 

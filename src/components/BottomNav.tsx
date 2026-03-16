@@ -1,20 +1,19 @@
+import { ArrowDown, ArrowUp, Bot, LayoutGrid, Settings2 } from "lucide-react"
 import React from "react"
 
-import type { Screen } from "~types"
-
-type Tab = "dashboard" | "send" | "receive" | "ai" | "settings"
+import type { Screen, Tab } from "~types"
 
 interface Props {
   active: Tab
   setScreen: (s: Screen) => void
 }
 
-const tabs: { id: Tab; label: string; icon: string }[] = [
-  { id: "dashboard", label: "Home", icon: "⬡" },
-  { id: "send", label: "Send", icon: "↑" },
-  { id: "receive", label: "Receive", icon: "↓" },
-  { id: "ai", label: "AI", icon: "◈" },
-  { id: "settings", label: "More", icon: "≡" }
+const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: "dashboard", label: "Home", icon: <LayoutGrid className="w-4 h-4" /> },
+  { id: "send", label: "Send", icon: <ArrowUp className="w-4 h-4" /> },
+  { id: "receive", label: "Receive", icon: <ArrowDown className="w-4 h-4" /> },
+  { id: "ai", label: "AI", icon: <Bot className="w-4 h-4" /> },
+  { id: "settings", label: "More", icon: <Settings2 className="w-4 h-4" /> }
 ]
 
 export const BottomNav: React.FC<Props> = ({ active, setScreen }) => (

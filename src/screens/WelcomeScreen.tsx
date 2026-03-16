@@ -25,7 +25,9 @@ export const WelcomeScreen: React.FC<Props> = ({ setScreen }) => (
     <div className="flex flex-col items-center text-center z-10 py-8">
       {/* Big Z mark */}
       <div className="w-20 h-20 rounded-2xl bg-white/[0.06] border border-white/10 flex items-center justify-center mb-6 glow-sm">
-        <span className="text-4xl font-black italic text-white">Z</span>
+        <span className="text-4xl font-black italic text-white shadow-md">
+          Z
+        </span>
       </div>
       <h1 className="text-[26px] font-extrabold leading-tight text-white mb-3 tracking-tight">
         The Intelligent

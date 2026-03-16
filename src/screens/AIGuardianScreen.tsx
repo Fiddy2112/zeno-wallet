@@ -1,3 +1,4 @@
+import { ArrowUpIcon } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
 
 import { AIMessage, type Message } from "~components/AIMessage"
@@ -14,7 +15,7 @@ const INITIAL: Message[] = [
   },
   {
     role: "ai",
-    text: "📊 Your portfolio is up 2.11% today. No suspicious activity detected. MEV protection has saved you an estimated $12.40 this week."
+    text: "Your portfolio is up 2.11% today. No suspicious activity detected. MEV protection has saved you an estimated $12.40 this week."
   }
 ]
 
@@ -138,7 +139,7 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
             onClick={() => send(input)}
             disabled={!input.trim()}
             className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-black font-bold hover:bg-white/90 transition-all active:scale-95 disabled:opacity-30 text-sm flex-shrink-0">
-            ↑
+            <ArrowUpIcon className="w-4 h-4" />
           </button>
         </div>
       </div>

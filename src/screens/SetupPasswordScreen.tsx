@@ -1,14 +1,21 @@
 import React, { useState } from "react"
 
+import { deriveWalletFromMnemonic } from "~core/wallet-engine"
+import { notify } from "~features/notifications"
+import { vaultSecurity } from "~features/security"
 import type { Screen } from "~types"
 
 interface Props {
   setScreen: (s: Screen) => void
+  setPassword: (p: string) => void
+  importedPhrase?: string
   nextScreen?: Screen // "seed-phrase" | "dashboard"
 }
 
 export const SetupPasswordScreen: React.FC<Props> = ({
   setScreen,
+  setPassword,
+  importedPhrase,
   nextScreen = "seed-phrase"
 }) => {
   const [pass, setPass] = useState("")
@@ -26,7 +33,7 @@ export const SetupPasswordScreen: React.FC<Props> = ({
     "text-emerald-400"
   ]
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (pass.length < 8) {
       setError("Password must be at least 8 characters.")
       return
@@ -35,8 +42,46 @@ export const SetupPasswordScreen: React.FC<Props> = ({
       setError("Passwords do not match.")
       return
     }
-    localStorage.setItem("zeno_pass_set", "true")
-    setScreen(nextScreen)
+
+    try {
+      // If we're importing, we create the vault NOW
+      if (importedPhrase) {
+        const wallet = deriveWalletFromMnemonic(importedPhrase)
+        const publicAddress = wallet.address
+        const salt = vaultSecurity.generateSalt()
+        const encryptedVault = vaultSecurity.encryptVault(
+          importedPhrase,
+          pass,
+          salt
+        )
+
+        if (
+          typeof chrome !== "undefined" &&
+          chrome.storage &&
+          chrome.storage.local
+        ) {
+          await chrome.storage.local.set({
+            zeno_vault: encryptedVault,
+            zeno_salt: salt,
+            zeno_onboarded: true,
+            zeno_address: publicAddress
+          })
+        }
+
+        localStorage.setItem("zeno_onboarded", "true")
+        localStorage.setItem("zeno_address", publicAddress)
+        localStorage.setItem("zeno_vault", encryptedVault)
+        localStorage.setItem("zeno_salt", salt)
+        notify.success("Wallet imported successfully!")
+      }
+
+      // We store the password temporarily for the session if needed
+      setPassword(pass)
+      setScreen(nextScreen)
+    } catch (err) {
+      console.error("Import error:", err)
+      setError("Failed to import wallet. Please check your phrase.")
+    }
   }
 
   return (

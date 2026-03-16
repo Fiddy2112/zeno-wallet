@@ -1,14 +1,6 @@
 import React from "react"
 
-export interface Token {
-  icon: string
-  name: string
-  symbol: string
-  balance: string
-  usd: string
-  change: number // percent
-  color: string
-}
+import type { Token } from "~types"
 
 interface Props {
   token: Token
@@ -22,7 +14,11 @@ export const TokenCard: React.FC<Props> = ({ token }) => {
       <div
         className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 font-bold"
         style={{ background: token.color + "22", color: token.color }}>
-        {token.icon}
+        <img
+          src={token.img}
+          alt={token.name}
+          className="w-full h-full object-contain rounded-full"
+        />
       </div>
 
       {/* Name + balance */}

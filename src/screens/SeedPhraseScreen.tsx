@@ -1,40 +1,90 @@
-import React, { useState } from "react"
+import { Eye } from "lucide-react"
+import React, { useEffect, useState } from "react"
 
+import { deriveWalletFromMnemonic } from "~core/wallet-engine"
+import { notify } from "~features/notifications"
+import { vaultSecurity } from "~features/security"
+import { generateMnemonic } from "~features/wallet-logic"
 import type { Screen } from "~types"
 
 interface Props {
   setScreen: (s: Screen) => void
+  userPassword?: string
+  setPassword: (p: string) => void
 }
 
-const MOCK_SEED = [
-  "abandon",
-  "ability",
-  "able",
-  "about",
-  "above",
-  "absent",
-  "absorb",
-  "abstract",
-  "absurd",
-  "abuse",
-  "access",
-  "account"
-]
-
-export const SeedPhraseScreen: React.FC<Props> = ({ setScreen }) => {
+export const SeedPhraseScreen: React.FC<Props> = ({
+  setScreen,
+  userPassword,
+  setPassword
+}) => {
+  const [mnemonic, setMnemonic] = useState<string[]>([])
   const [revealed, setRevealed] = useState(false)
   const [backed, setBacked] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  useEffect(() => {
+    const mnemonic = generateMnemonic()
+    setMnemonic(mnemonic)
+  }, [])
+
   const handleCopy = () => {
-    navigator.clipboard?.writeText(MOCK_SEED.join(" "))
+    navigator.clipboard?.writeText(mnemonic.join(" "))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    notify.warning(
+      "Don't send it to anyone and don't show it to anyone, not even Zeno!",
+      "dark",
+      3000
+    )
   }
 
-  const handleContinue = () => {
-    localStorage.setItem("zeno_onboarded", "true")
-    setScreen("dashboard")
+  const handleContinue = async () => {
+    if (!userPassword) {
+      notify.error("Session error: Password not found.")
+      setScreen("setup-pass")
+      return
+    }
+
+    try {
+      // Create address wallet from 12 words
+      const wallet = deriveWalletFromMnemonic(mnemonic.join(" "))
+      const publicAddress = wallet.address
+      // vaultSecurity
+      const salt = vaultSecurity.generateSalt()
+      const encryptedVault = vaultSecurity.encryptVault(
+        mnemonic.join(" "),
+        userPassword,
+        salt
+      )
+
+      // Try to save to chrome storage if available
+      if (
+        typeof chrome !== "undefined" &&
+        chrome.storage &&
+        chrome.storage.local
+      ) {
+        await chrome.storage.local.set({
+          zeno_vault: encryptedVault,
+          zeno_salt: salt,
+          zeno_onboarded: true,
+          zeno_address: publicAddress
+        })
+      }
+
+      // Fallback/Sync with localStorage for the root IndexPopup check
+      localStorage.setItem("zeno_onboarded", "true")
+      localStorage.setItem("zeno_address", publicAddress)
+      localStorage.setItem("zeno_vault", encryptedVault)
+      localStorage.setItem("zeno_salt", salt)
+
+      setPassword("")
+      setScreen("dashboard")
+      notify.success("Wallet created successfully!")
+    } catch (err) {
+      console.error("Failed to save wallet:", err)
+      notify.error("Failed to save wallet. Please try again.")
+    }
   }
 
   return (
@@ -62,7 +112,7 @@ export const SeedPhraseScreen: React.FC<Props> = ({ setScreen }) => {
       <div className="relative mb-4">
         <div
           className={`grid grid-cols-3 gap-1.5 transition-all duration-300 ${!revealed ? "blur-sm select-none pointer-events-none" : ""}`}>
-          {MOCK_SEED.map((word, i) => (
+          {mnemonic.map((word, i) => (
             <div
               key={i}
               className="glass rounded-lg px-2 py-2 flex items-center gap-1.5">
@@ -79,7 +129,10 @@ export const SeedPhraseScreen: React.FC<Props> = ({ setScreen }) => {
           <button
             onClick={() => setRevealed(true)}
             className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-xl text-white font-semibold text-sm gap-2 hover:bg-black/40 transition-all">
-            <span>👁</span> Click to reveal
+            <span>
+              <Eye />
+            </span>
+            Click to reveal
           </button>
         )}
       </div>

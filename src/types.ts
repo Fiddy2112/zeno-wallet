@@ -9,3 +9,16 @@ export type Screen =
   | "swap"
   | "ai"
   | "settings"
+  | "unlock"
+
+export type Tab = "dashboard" | "send" | "receive" | "ai" | "settings"
+
+export interface Token {
+  img: string
+  name: string
+  symbol: string
+  balance: string
+  usd: string
+  change: number
+  color: string
+}
