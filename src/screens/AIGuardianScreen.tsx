@@ -1,4 +1,4 @@
-import { ArrowUpIcon } from "lucide-react"
+import { ArrowLeftIcon, ArrowUpIcon } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
 
 import { AIMessage, type Message } from "~components/AIMessage"
@@ -69,18 +69,18 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
         <button
           onClick={() => setScreen("dashboard")}
           className="w-8 h-8 glass rounded-xl flex items-center justify-center text-white/50 hover:text-white transition-colors">
-          ←
+          <ArrowLeftIcon className="w-4 h-4" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm">
-            ◈
+          <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm italic">
+            Z
           </div>
           <div>
             <p className="text-white text-sm font-semibold leading-none">
               Zeno AI Guardian
             </p>
             <p className="text-emerald-400 text-[10px] mt-0.5 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />
               Active — monitoring wallet
             </p>
           </div>
@@ -94,8 +94,8 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
         ))}
         {loading && (
           <div className="flex gap-2 justify-start animate-fade-in">
-            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs flex-shrink-0">
-              ◈
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs flex-shrink-0 italic">
+              Z
             </div>
             <div className="glass px-4 py-3 rounded-2xl rounded-tl-sm">
               <div className="flex gap-1">

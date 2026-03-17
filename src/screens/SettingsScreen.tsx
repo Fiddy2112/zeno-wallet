@@ -1,5 +1,19 @@
-import React, { useState } from "react"
+import {
+  Circle,
+  Clipboard,
+  Copy,
+  File,
+  Flashlight,
+  Hexagon,
+  Key,
+  Shield,
+  Timer,
+  Trash
+} from "lucide-react"
+import React, { useEffect, useState } from "react"
 
+import { notify } from "~features/notifications"
+import { vaultSecurity } from "~features/security"
 import type { Screen } from "~types"
 
 interface Props {
@@ -8,53 +22,69 @@ interface Props {
   setProMode: (v: boolean) => void
 }
 
-const ADDR = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
-
+// COMPONENT CON: Section
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
   title,
   children
 }) => (
-  <div className="mb-4">
-    <p className="text-white/25 text-[10px] uppercase tracking-[0.2em] px-1 mb-2">
+  <div className="mb-6">
+    <p className="text-white/20 text-[10px] uppercase tracking-[0.2em] px-2 mb-2 font-bold">
       {title}
     </p>
-    <div className="glass rounded-xl overflow-hidden divide-y divide-white/[0.05]">
+    <div className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden divide-y divide-white/[0.05]">
       {children}
     </div>
   </div>
 )
 
+// COMPONENT CON: Row
 const Row: React.FC<{
-  icon: string
+  icon: React.ReactNode
   label: string
   value?: string
   danger?: boolean
   onClick?: () => void
   right?: React.ReactNode
 }> = ({ icon, label, value, danger, onClick, right }) => (
-  <button
+  <div
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-all text-left ${danger ? "text-red-400" : ""}`}>
-    <span className="text-base">{icon}</span>
+    className={`w-full flex items-center gap-3 px-4 py-3.5 transition-all ${
+      onClick
+        ? "cursor-pointer hover:bg-white/[0.04] active:bg-white/[0.06]"
+        : ""
+    } ${danger ? "text-red-400" : ""}`}>
+    <span className="text-base flex-shrink-0">{icon}</span>
     <span
       className={`flex-1 text-sm font-medium ${danger ? "text-red-400" : "text-white/80"}`}>
       {label}
     </span>
-    {value && <span className="text-white/30 text-xs font-mono">{value}</span>}
-    {right}
-    {!right && !value && <span className="text-white/20 text-sm">›</span>}
-  </button>
+    {value && (
+      <span className="text-white/30 text-xs font-mono mr-2">{value}</span>
+    )}
+    {right && <div onClick={(e) => e.stopPropagation()}>{right}</div>}
+    {!right && !value && onClick && (
+      <span className="text-white/20 text-sm">›</span>
+    )}
+  </div>
 )
 
+// COMPONENT CON: Toggle
 const Toggle: React.FC<{ on: boolean; onToggle: () => void }> = ({
   on,
   onToggle
 }) => (
   <button
-    onClick={onToggle}
-    className={`w-10 h-5 rounded-full relative transition-all flex-shrink-0 ${on ? "bg-white" : "bg-white/10"}`}>
+    onClick={(e) => {
+      e.stopPropagation()
+      onToggle()
+    }}
+    className={`w-9 h-5 rounded-full relative transition-all duration-300 flex-shrink-0 ${
+      on ? "bg-white" : "bg-white/10"
+    }`}>
     <div
-      className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${on ? "bg-black right-0.5" : "bg-white/40 left-0.5"}`}
+      className={`absolute top-1 w-3 h-3 rounded-full transition-all duration-300 ${
+        on ? "bg-black right-1 shadow-sm" : "bg-white/40 left-1"
+      }`}
     />
   </button>
 )
@@ -64,114 +94,175 @@ export const SettingsScreen: React.FC<Props> = ({
   proMode,
   setProMode
 }) => {
-  const [mev, setMev] = useState(true)
-  const [biometric, setBiometric] = useState(false)
+  const [address, setAddress] = useState("")
   const [network, setNetwork] = useState("Ethereum Mainnet")
+  const [aiGuardian, setAiGuardian] = useState(true)
 
-  const short = ADDR.slice(0, 6) + "..." + ADDR.slice(-4)
+  // lock time
+  const [autoLock, setAutoLock] = useState("15")
 
-  const reset = () => {
-    if (confirm("Reset wallet? This cannot be undone.")) {
+  useEffect(() => {
+    chrome.storage.local.get(["zeno_address", "zeno_lock_limit"], (res) => {
+      if (res.zeno_address) setAddress(res.zeno_address)
+      if (res.zeno_lock_limit) setAutoLock(res.zeno_lock_limit)
+    })
+  }, [])
+
+  const shortAddr = address
+    ? `${address.slice(0, 6)}...${address.slice(-4)}`
+    : "Loading..."
+
+  const handleReset = async () => {
+    if (
+      confirm(
+        "Reset wallet? Hành động này sẽ xóa toàn bộ dữ liệu và không thể hoàn tác!"
+      )
+    ) {
+      await chrome.storage.local.clear()
       localStorage.clear()
-      setScreen("welcome")
+      window.location.reload()
     }
   }
 
+  const handleAutoLockChange = (value: string) => {
+    setAutoLock(value)
+    chrome.storage.local.set({ zeno_lock_limit: value })
+    notify.success(`Auto-lock set to ${value} minutes`)
+  }
+
   return (
-    <div className="flex-1 overflow-y-auto p-4 animate-fade-up">
-      {/* Profile */}
+    <div className="flex-1 flex flex-col overflow-y-auto p-4 custom-scrollbar animate-fade-up">
+      {/* Header / Profile */}
       <div className="flex items-center gap-3 mb-6">
         <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl font-black text-white">
           Z
         </div>
         <div>
-          <p className="text-white font-bold">Zeno Account 1</p>
-          <p className="text-white/30 text-xs font-mono">{short}</p>
+          <h2 className="text-white font-black text-lg leading-none mb-1">
+            Zeno Identity 01
+          </h2>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest">
+              Active
+            </span>
+            <span className="text-white/20 text-[10px]">•</span>
+            <span className="text-white/40 text-[10px] font-mono">
+              {shortAddr}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Account */}
-      <Section title="Account">
+      {/* Identity & Security */}
+      <Section title="Intelligence & Security">
         <Row
-          icon="⎘"
-          label="Copy Address"
-          value={short}
-          onClick={() => navigator.clipboard?.writeText(ADDR)}
+          icon={<Circle className="text-white/20 h-3 w-3" />}
+          label="Pro Mode (Degen)"
+          right={<Toggle on={proMode} onToggle={() => setProMode(!proMode)} />}
         />
-        <Row icon="↗" label="View on Etherscan" />
-        <Row icon="🔑" label="Export Private Key" />
-        <Row icon="📋" label="Show Seed Phrase" />
+        <Row
+          icon={<Shield className="text-white/20 h-3 w-3" />}
+          label="AI Guardian Active"
+          right={
+            <Toggle
+              on={aiGuardian}
+              onToggle={() => setAiGuardian(!aiGuardian)}
+            />
+          }
+        />
+        <Row
+          icon={<Flashlight className="text-white/20 h-3 w-3" />}
+          label="MEV Protection"
+          right={<Toggle on={true} onToggle={() => {}} />}
+        />
+      </Section>
+
+      {/* Wallet Management */}
+      <Section title="Account Management">
+        <Row
+          icon={<Copy className="text-white/20 h-3 w-3" />}
+          label="Copy Address"
+          onClick={() => {
+            navigator.clipboard.writeText(address)
+            notify.success("Address copied!", "dark", 3000)
+          }}
+        />
+        <Row
+          icon={<Key className="text-white/20 h-3 w-3" />}
+          label="View Private Key"
+          onClick={() => setScreen("unlock")}
+        />
+        <Row
+          icon={<Clipboard className="text-white/20 h-3 w-3" />}
+          label="Secret Recovery Phrase"
+          onClick={() => setScreen("unlock")}
+        />
       </Section>
 
       {/* Network */}
-      <Section title="Network">
+      <Section title="Network Configuration">
         <Row
-          icon="⬡"
-          label={network}
+          icon={<Hexagon className="text-white/20 h-3 w-3" />}
+          label="Current Network"
           right={
             <select
               value={network}
               onChange={(e) => setNetwork(e.target.value)}
-              className="bg-transparent text-white/30 text-xs outline-none cursor-pointer"
-              onClick={(e) => e.stopPropagation()}>
-              {[
-                "Ethereum Mainnet",
-                "Arbitrum One",
-                "Base",
-                "Polygon",
-                "Goerli Testnet"
-              ].map((n) => (
-                <option key={n} value={n} className="bg-black text-white">
-                  {n}
-                </option>
-              ))}
+              className="bg-transparent text-white/40 text-xs font-bold outline-none cursor-pointer">
+              <option value="Ethereum Mainnet">Ethereum</option>
+              <option value="Arbitrum One">Arbitrum</option>
+              <option value="Base">Base</option>
+              <option value="Sepolia">Sepolia Testnet</option>
             </select>
           }
         />
       </Section>
 
-      {/* Mode */}
-      <Section title="Wallet Mode">
+      {/* Lock time */}
+      <Section title="Security System">
         <Row
-          icon="◈"
-          label={proMode ? "Pro Mode (Degen)" : "Lite Mode (Simple)"}
-          right={<Toggle on={proMode} onToggle={() => setProMode(!proMode)} />}
-        />
-      </Section>
-
-      {/* Security */}
-      <Section title="Security">
-        <Row
-          icon="⚡"
-          label="MEV Protection"
-          right={<Toggle on={mev} onToggle={() => setMev(!mev)} />}
-        />
-        <Row
-          icon="👤"
-          label="Biometric Unlock"
+          icon={<Timer className="text-white/20 h-3 w-3" />}
+          label="Auto-lock Timer"
           right={
-            <Toggle on={biometric} onToggle={() => setBiometric(!biometric)} />
+            <select
+              value={autoLock}
+              onChange={(e) => handleAutoLockChange(e.target.value)}
+              className="bg-transparent text-white/40 text-xs font-bold outline-none cursor-pointer">
+              <option value="15">15 Minutes</option>
+              <option value="30">30 Minutes</option>
+              <option value="60">1 Hour</option>
+              <option value="240">4 Hours</option>
+              <option value="never">Never</option>
+            </select>
           }
         />
-        <Row icon="🔒" label="Change Password" />
-        <Row icon="🔔" label="Alert Notifications" />
+        <Row
+          icon={<Shield className="text-white/20 h-3 w-3" />}
+          label="Confirm Transactions"
+          right={<Toggle on={true} onToggle={() => {}} />}
+        />
       </Section>
 
-      {/* About */}
-      <Section title="About">
-        <Row icon="Z" label="Version" value="v0.0.1 Beta" />
-        <Row icon="📄" label="Privacy Policy" />
-        <Row icon="❓" label="Help & Support" />
+      {/* System */}
+      <Section title="System">
+        <Row
+          icon={<File className="text-white/20 h-3 w-3" />}
+          label="Version"
+          value="v1.0.4-beta"
+        />
+        <Row
+          icon={<Trash className="text-white/20 h-3 w-3" />}
+          label="Logout Wallet"
+          danger
+          onClick={handleReset}
+        />
       </Section>
 
-      {/* Danger zone */}
-      <Section title="Danger Zone">
-        <Row icon="🗑" label="Reset Wallet" danger onClick={reset} />
-      </Section>
-
-      <p className="text-center text-white/15 text-[10px] uppercase tracking-[0.2em] py-4">
-        Zeno Wallet — The Intelligent Nexus
-      </p>
+      <div className="mt-auto py-6 text-center">
+        <p className="text-white/10 text-[9px] uppercase tracking-[0.3em]">
+          Zeno Protocol — Autonomous Web3 Commander
+        </p>
+      </div>
     </div>
   )
 }

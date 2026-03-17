@@ -43,32 +43,50 @@ function IndexPopup() {
   const [importedPhrase, setImportedPhrase] = useState("")
   // unlock screen
   const [isUnlocked, setIsUnlocked] = useState(false)
+  const [autoLock, setAutoLock] = useState("1")
 
   useEffect(() => {
-    // Check if onboarding is complete
-    const checkOnboarding = async () => {
-      if (
-        typeof chrome !== "undefined" &&
-        chrome.storage &&
-        chrome.storage.local
-      ) {
-        const res = await chrome.storage.local.get(["zeno_onboarded"])
+    const initApp = async () => {
+      if (typeof chrome !== "undefined" && chrome.storage?.local) {
+        const res = await chrome.storage.local.get([
+          "zeno_onboarded",
+          "zeno_timestamp",
+          "zeno_lock_limit"
+        ])
+
         if (res.zeno_onboarded) {
-          setScreen("unlock")
-        } else {
-          setScreen("welcome")
-        }
-      } else {
-        const onboarded = localStorage.getItem("zeno_onboarded")
-        if (onboarded === "true") {
-          setScreen("unlock")
+          // Check time limit
+          const limitValue = res.zeno_lock_limit || "15"
+          const lockLimit =
+            limitValue === "never" ? Infinity : parseInt(limitValue)
+
+          const lastActive = res.zeno_timestamp
+            ? new Date(res.zeno_timestamp).getTime()
+            : 0
+          const now = Date.now()
+          const diffInMinutes = (now - lastActive) / (1000 * 60)
+
+          // If expired -> Unlock Screen
+          if (lockLimit !== Infinity && diffInMinutes > lockLimit) {
+            setScreen("unlock")
+          } else {
+            // Within time limit or session active
+            setScreen("dashboard")
+            // Also set isUnlocked to true so we don't keep checking
+            setIsUnlocked(true)
+          }
+
+          // Update timestamp to now while popup is open
+          await chrome.storage.local.set({
+            zeno_timestamp: new Date().toISOString()
+          })
         } else {
           setScreen("welcome")
         }
       }
     }
-    checkOnboarding()
-  }, [])
+    initApp()
+  }, []) // Run once on mount
 
   const isMainApp = MAIN_SCREENS.includes(screen)
   const showNav = (BOTTOM_NAV_SCREENS as string[]).includes(screen as string)
@@ -131,7 +149,9 @@ function IndexPopup() {
           />
         )
       case "unlock":
-        return <UnlockScreen setScreen={setScreen} />
+        return (
+          <UnlockScreen setScreen={setScreen} setIsUnlocked={setIsUnlocked} />
+        )
       default:
         return <WelcomeScreen setScreen={setScreen} />
     }

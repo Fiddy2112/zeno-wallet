@@ -1,145 +1,134 @@
-# ⚡ Zeno Wallet — The Intelligent Nexus
+# Zeno Wallet — The Intelligent Nexus
 
-> A next-generation, AI-powered Web3 browser extension wallet built with Plasmo. Zeno shifts the wallet from a passive tool into an intelligent co-pilot that monitors, guides, and protects.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/plasmo-corp/plasmo/main/packages/plasmo/assets/icon.png" width="80" height="80" alt="Zeno Logo" />
+</p>
 
----
+<p align="center">
+  <strong>The next generation of Web3 security.</strong><br />
+  A premium, AI-powered browser extension wallet that converts passive management into active protection.
+</p>
 
-## ✨ Key Features
-
-| Feature                  | Description                                                                             |
-| ------------------------ | --------------------------------------------------------------------------------------- |
-| **Dual-Mode UI**         | Lite Mode (intent-based, simple) & Pro Mode (alpha hunting, advanced analytics)         |
-| **AI Security Guardian** | Real-time transaction simulation, threat detection & risk assessment via in-app AI chat |
-| **Onboarding Tour**      | Interactive step-by-step guided tour powered by [Driver.js](https://driverjs.com)       |
-| **Multi-Chain Support**  | Ethereum, Arbitrum, Base, Polygon — more chains added automatically                     |
-| **Glassmorphism Design** | Dark, premium UI with micro-animations, custom scrollbars & dynamic glow effects        |
-| **Account Abstraction**  | ERC-4337 ready — gasless transactions & social login (zkLogin) planned                  |
-
----
-
-## 🗺 Guided Tour (Driver.js)
-
-Zeno ships with a built-in interactive onboarding tour using **[Driver.js](https://driverjs.com)**:
-
-- **Auto-starts** on first Dashboard visit (stored in `localStorage` as `zeno_tour_done`)
-- **9 steps** covering every major UI element — logo, address, network, mode toggle, balance, actions, assets, AI nav & settings
-- **Themed** to match Zeno's dark glassmorphism aesthetic (custom popover CSS in `style.css`)
-- **Re-triggerable** at any time via the `?` button in the top-right corner of the Dashboard
-
-### Tour Steps
-
-1. Welcome to Zeno
-2. Your Wallet Address (copy)
-3. Network Selector
-4. Lite / Pro Mode toggle
-5. Total Balance display
-6. Quick Actions (Send / Receive / Swap / Buy)
-7. Asset list
-8. AI Guardian nav tab
-9. Settings nav tab
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-1.0.4--beta-white?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Powered_By-Gemini_Pro-blue?style=flat-square&logo=google-gemini" alt="AI Powered" />
+  <img src="https://img.shields.io/badge/Built_With-Plasmo-purple?style=flat-square" alt="Plasmo" />
+  <img src="https://img.shields.io/badge/Security-AI_Guardian-emerald?style=flat-square" alt="Security" />
+</p>
 
 ---
 
-## 🏗 Project Structure
+## The Zeno Philosophy
 
-```
-src/
-├── popup.tsx                   # Root — orchestrates Screen navigation state
-├── style.css                   # Tailwind base + custom keyframes, scrollbar & Driver.js theme
-│
-├── components/
-│   ├── BottomNav.tsx           # Nav bar (Dashboard / Send / Receive / AI / Settings)
-│   ├── TokenCard.tsx           # Single token row (icon, name, balance, change %)
-│   └── AIMessage.tsx           # AI chat bubble component
-│
-├── features/
-│   └── useDashboardTour.ts     # Driver.js tour hook (steps, auto-start, re-trigger)
-│
-└── screens/
-    ├── WelcomeScreen.tsx        # Entry — Create wallet or Import
-    ├── SetupPasswordScreen.tsx  # Password creation
-    ├── SeedPhraseScreen.tsx     # Seed phrase reveal & backup confirmation
-    ├── ImportWalletScreen.tsx   # Import via 12/24-word seed phrase
-    ├── DashboardScreen.tsx      # Main wallet view (tour anchors, balance, assets)
-    ├── SendScreen.tsx           # Send crypto with AI address verification
-    ├── ReceiveScreen.tsx        # QR code + address copy
-    ├── SwapScreen.tsx           # Token swap with slippage control
-    ├── AIGuardianScreen.tsx     # AI chat interface
-    └── SettingsScreen.tsx       # Account, security, network & preferences
-```
+Zeno isn't just a place to hold your private keys. It's an **Autonomous Web3 Commander**. By integrating **Google Gemini Pro** directly into the wallet core, Zeno analyzes every intent, detects phishing in real-time, and simplifies the complex Web3 landscape into actionable intelligence.
 
 ---
 
-## 🛠 Tech Stack
+## Premium Features
 
-| Layer                   | Technology                                  |
-| ----------------------- | ------------------------------------------- |
-| **Extension Framework** | [Plasmo](https://www.plasmo.com/) `0.90.5`  |
-| **UI Library**          | React 18 + TypeScript 5                     |
-| **Styling**             | Tailwind CSS 3 + Vanilla CSS (custom layer) |
-| **Onboarding Tour**     | [Driver.js](https://driverjs.com)           |
-| **Web3 (planned)**      | Viem + Wagmi + zkLogin                      |
-| **Package Manager**     | pnpm                                        |
+### Zeno Core (AI Interface)
+
+- **Natural Language Intents**: Send crypto by simply typing "Send 0.5 ETH to vitalik.eth".
+- **Risk Analysis**: Every AI-parsed request gets a real-time risk score (0-1) and a safety explanation.
+- **Context-Aware**: Understands your balances, recent transactions, and network status to provide better advice.
+
+### Intelligent Security
+
+- **AI Guardian**: Real-time monitoring of your wallet activity for suspicious behavior.
+- **Phishing Detection**: Automated analysis of recipient addresses and smart contract interactions.
+- **Auto-Lock System**: Customizable security timers (15m to "Never") to protect your vault when inactive.
+
+### 🌐 Multi-Chain Nexus
+
+- **Unified Portfolio**: Track ETH, BNB, MATIC, ARB, OP, and BASE assets in one view.
+- **Real-Time Market Data**: Live price tracking and 24h performance metrics powered by CoinGecko.
+- **Identity Hub**: Manage multiple HD accounts and imported private keys with a sleek, unified interface.
+
+### Elite UX/UI
+
+- **Glassmorphism Design**: A stunning dark-mode interface with vibrant glow effects and micro-animations.
+- **Guided Onboarding**: A comprehensive 9-step interactive tour powered by **Driver.js**.
+- **Pro/Lite Modes**: Switch between a simplified interface and an advanced "Degen" dashboard with MEV protection.
 
 ---
 
-## 📦 Development
+## Interactive Tour
 
-### Prerequisites
+New users are greeted with a structural walkthrough of the Zeno Nexus:
 
-- Node.js ≥ 18
-- pnpm (`npm install -g pnpm`)
+1. **Logo & Identity**: The heart of your autonomous commander.
+2. **Address Management**: Quick access to your public identity.
+3. **Multi-Chain Selector**: Seamlessly jump between L1s and L2s.
+4. **Mode Toggle**: Lite for daily use, Pro for the heavy hitters.
+5. **Portfolio Valuation**: Your net worth across the entire ecosystem.
+6. **Action Center**: The command hub for Send, Receive, and Swap.
+7. **Asset Nexus**: Detailed token breakdown with live pricing.
+8. **AI Guardian**: Your direct line to Zeno Core.
+9. **Command Center (Settings)**: Fine-tune your security and preferences.
 
-### Setup
+---
+
+## Architecture & Tech Stack
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/your-org/zeno-extension.git
-cd zeno-extension
+src/
+├── core/             # Wallet engine, chain clients & crypto logic
+├── features/         # AI Service (Gemini), Notifications, Security
+├── hooks/            # usePortfolio (Multi-chain), Token balances
+├── screens/          # Dashboard, AI Guardian, Identity/Unlock screens
+└── components/       # Custom UI kit (TokenCard, BottomNav, etc.)
+```
 
-# 2. Install dependencies
+| Layer            | Technology                                     |
+| :--------------- | :--------------------------------------------- |
+| **Framework**    | [Plasmo](https://www.plasmo.com/) (Chrome MV3) |
+| **Intelligence** | Google Gemini Pro API                          |
+| **Blockchain**   | Ethers v6, Viem, Alchemy SDK                   |
+| **State/UI**     | React 18, Tailwind CSS, Lucide Icons           |
+| **Onboarding**   | Driver.js                                      |
+
+---
+
+## Setup & Installation
+
+### Build Requirements
+
+- Node.js 18.x or higher
+- pnpm
+
+### Development
+
+```bash
+# Install dependencies
 pnpm install
 
-# 3. Start dev server (loads as an unpacked extension)
+# Start development server
 pnpm dev
 ```
 
-### Load as Unpacked Extension
+1. Open Chrome and navigate to `chrome://extensions`.
+2. Enable **Developer Mode**.
+3. Click **Load unpacked** and select the `build/chrome-mv3-dev` folder.
 
-1. Open Chrome → `chrome://extensions`
-2. Enable **Developer Mode** (top-right toggle)
-3. Click **Load unpacked** → select the `build/chrome-mv3-dev` folder
+### Configuration
 
-### Build for Production
+Create a `.env` file in the root directory:
 
-```bash
-pnpm build
-# Output: build/chrome-mv3-prod/
-```
-
-### Package for Distribution
-
-```bash
-pnpm package
-# Creates a .zip ready for the Chrome Web Store
+```env
+PLASMO_PUBLIC_ALCHEMY_API_KEY=your_alchemy_key
+GEMINI_API_KEY=your_gemini_key
 ```
 
 ---
 
-## 📁 Key Files at a Glance
+## Security
 
-| File                               | Purpose                                                                    |
-| ---------------------------------- | -------------------------------------------------------------------------- |
-| `src/popup.tsx`                    | Defines the `Screen` union type, manages navigation state, renders screens |
-| `src/features/useDashboardTour.ts` | All Driver.js tour logic — steps, theming options, auto-start logic        |
-| `src/style.css`                    | Global styles + all `.zeno-tour-popover` CSS overrides for Driver.js       |
-| `src/screens/DashboardScreen.tsx`  | Main screen with `id` anchors for each tour step                           |
-| `src/components/BottomNav.tsx`     | Bottom nav with `id="tour-nav-ai"` and `id="tour-nav-settings"` anchors    |
+- **Local Sovereignty**: Private keys and seed phrases never leave your local storage.
+- **Encryption**: AES-256 encryption via CryptoJS for vault storage.
+- **Transparency**: AI analysis is provided as a tool; the final signature always rests with the human commander.
 
 ---
 
-## 🔒 Security Notes
-
-- Passwords are stored locally via `localStorage` — **never** sent to a server
-- Seed phrases are displayed in-app only and never leave the device
-- AI Guardian performs client-side simulation before any transaction is signed
+<p align="center">
+  <i>Zeno Protocol — Autonomous Web3 Commander</i>
+</p>

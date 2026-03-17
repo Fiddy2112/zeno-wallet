@@ -6,9 +6,10 @@ import type { Screen } from "~types"
 
 interface Props {
   setScreen: (s: Screen) => void
+  setIsUnlocked?: (v: boolean) => void
 }
 
-export const UnlockScreen: React.FC<Props> = ({ setScreen }) => {
+export const UnlockScreen: React.FC<Props> = ({ setScreen, setIsUnlocked }) => {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -54,6 +55,7 @@ export const UnlockScreen: React.FC<Props> = ({ setScreen }) => {
     try {
       // Get value from storage
       const res = await chrome.storage.local.get(["zeno_vault", "zeno_salt"])
+      chrome.storage.local.set({ zeno_timestamp: new Date().toISOString() })
 
       if (!res.zeno_vault || !res.zeno_salt) {
         notify.error("Vault empty! Please reset wallet.")
@@ -71,6 +73,7 @@ export const UnlockScreen: React.FC<Props> = ({ setScreen }) => {
       // Check result (if decryption fails, it will return an empty string or garbage)
       if (decrypted && decrypted.split(" ").length >= 12) {
         notify.success("Access Granted. Welcome back, Commander.")
+        if (setIsUnlocked) setIsUnlocked(true)
         setScreen("dashboard")
       } else {
         notify.error("Invalid credentials. Access denied.")
@@ -112,14 +115,14 @@ export const UnlockScreen: React.FC<Props> = ({ setScreen }) => {
         onChange={(e) => setPassword(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
         placeholder="Type your password..."
-        className="w-full bg-white/[0.04] border border-white/10 focus:border-cyan-500/50 text-white px-4 py-3.5 rounded-xl outline-none text-center transition-all mb-4"
+        className="w-full bg-white/[0.04] border border-white/10 focus:text-white/40 text-white px-4 py-3.5 rounded-xl outline-none text-center transition-all mb-4"
         autoFocus
       />
 
       <button
         onClick={handleUnlock}
         disabled={loading}
-        className="w-full py-3.5 bg-white text-black font-bold rounded-xl text-sm tracking-widest hover:bg-cyan-400 transition-all active:scale-95">
+        className="w-full py-3.5 hover:bg-white hover:text-black border border-white/40 text-white font-bold rounded-xl text-sm tracking-widest transition-all active:scale-95">
         {loading ? "DECRYPTING..." : "UNLOCK"}
       </button>
 

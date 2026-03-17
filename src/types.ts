@@ -22,3 +22,28 @@ export interface Token {
   change: number
   color: string
 }
+
+export const mapToToken = (token: any) => {
+  const balanceNum = Number(token.balance || 0)
+  const usdNum = Number(token.usdValue || 0)
+
+  return {
+    name: token.symbol,
+    symbol: token.symbol,
+    balance: balanceNum.toFixed(4),
+    usd: `$ ${usdNum.toFixed(2)}`,
+    change: token.change ?? 0,
+    img: token.logo || getDefaultLogo(token.symbol),
+    color: "#FFFFFF"
+  }
+}
+
+const getDefaultLogo = (symbol: string) => {
+  const map: Record<string, string> = {
+    ETH: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+    BNB: "https://cryptologos.cc/logos/binance-coin-bnb-logo.png",
+    USDT: "https://cryptologos.cc/logos/tether-usdt-logo.png"
+  }
+
+  return map[symbol] || map["ETH"]
+}
