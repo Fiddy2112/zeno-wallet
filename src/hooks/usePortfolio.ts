@@ -1,5 +1,12 @@
-import { ethers } from "ethers"
 import { useEffect, useState } from "react"
+import {
+  createPublicClient,
+  formatEther,
+  formatUnits,
+  http,
+  isAddress
+} from "viem"
+import { arbitrum, base, bsc, mainnet, optimism, polygon } from "viem/chains"
 
 const COINGECKO_PLATFORM: Record<string, string> = {
   ethereum: "ethereum",
@@ -16,6 +23,7 @@ const SUPPORTED_CHAINS = [
   {
     id: "ethereum",
     coingeckoId: "ethereum",
+    chain: mainnet,
     name: "Ethereum",
     rpc: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
     alchemyUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
@@ -25,6 +33,7 @@ const SUPPORTED_CHAINS = [
   {
     id: "bsc",
     coingeckoId: "binancecoin",
+    chain: bsc,
     name: "BNB Chain",
     rpc: "https://rpc.ankr.com/bsc",
     nativeSymbol: "BNB",
@@ -33,6 +42,7 @@ const SUPPORTED_CHAINS = [
   {
     id: "arbitrum",
     coingeckoId: "ethereum",
+    chain: arbitrum,
     name: "Arbitrum",
     rpc: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
     alchemyUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
@@ -42,6 +52,7 @@ const SUPPORTED_CHAINS = [
   {
     id: "optimism",
     coingeckoId: "ethereum",
+    chain: optimism,
     name: "Optimism",
     rpc: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
     alchemyUrl: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
@@ -51,6 +62,7 @@ const SUPPORTED_CHAINS = [
   {
     id: "polygon",
     coingeckoId: "matic-network",
+    chain: polygon,
     name: "Polygon",
     rpc: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
     alchemyUrl: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
@@ -60,6 +72,7 @@ const SUPPORTED_CHAINS = [
   {
     id: "base",
     coingeckoId: "ethereum",
+    chain: base,
     name: "Base",
     rpc: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
     alchemyUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
@@ -90,8 +103,9 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    if (!walletAddress || !ethers.isAddress(walletAddress)) {
+    if (!walletAddress || !isAddress(walletAddress)) {
       setIsLoading(false)
+      setNetworkGroups([])
       return
     }
 
@@ -113,14 +127,19 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
         const results = await Promise.all<NetworkGroup | null>(
           SUPPORTED_CHAINS.map(async (chain) => {
             try {
-              const provider = new ethers.JsonRpcProvider(chain.rpc)
+              const publicClient = createPublicClient({
+                chain: chain.chain,
+                transport: http(chain.rpc)
+              })
 
               let chainTokens: TokenInfo[] = []
               let chainTotalUsd = 0
 
               // ===== Native =====
-              const nativeBal = await provider.getBalance(walletAddress)
-              const native = Number(ethers.formatEther(nativeBal))
+              const nativeBalBigInt = await publicClient.getBalance({
+                address: walletAddress as `0x${string}`
+              })
+              const native = Number(formatEther(nativeBalBigInt))
               const nativePrice = prices[chain.coingeckoId]?.usd || 0
 
               if (native > 0) {
@@ -148,19 +167,26 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                     params: [walletAddress],
                     id: 1
                   })
-                }).then((r) => r.json())
+                })
+                  .then((r) => r.json())
+                  .catch(() => null)
 
                 const tokens = res?.result?.tokenBalances || []
 
                 const filtered = tokens
-                  .filter((t: any) => t.tokenBalance !== "0x0")
+                  .filter(
+                    (t: any) =>
+                      t.tokenBalance !== "0x0" &&
+                      t.tokenBalance !==
+                        "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  )
                   .slice(0, 20)
 
                 // metadata parallel
                 const metaTokens = await Promise.all(
                   filtered.map(async (t: any) => {
                     try {
-                      const meta = await fetch(chain.alchemyUrl!, {
+                      const metaRes = await fetch(chain.alchemyUrl!, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -169,14 +195,14 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                           params: [t.contractAddress],
                           id: 1
                         })
-                      })
-                        .then((r) => r.json())
-                        .then((d) => d.result)
+                      }).then((r) => r.json())
+
+                      const meta = metaRes?.result
 
                       if (!meta?.decimals) return null
 
                       const balance = Number(
-                        ethers.formatUnits(t.tokenBalance, meta.decimals)
+                        formatUnits(t.tokenBalance, meta.decimals)
                       )
 
                       if (balance <= 0) return null

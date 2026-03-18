@@ -6,10 +6,13 @@ export const IdentityHub: React.FC<{
   accounts: any[]
   activeAddress: string
   onSelect: (addr: string) => void
-  onAdd: () => void
+  onAdd: (pass: string) => void
   onClose: () => void
 }> = ({ accounts, activeAddress, onSelect, onAdd, onClose }) => {
   const [copied, setCopied] = useState(false)
+  const [isAdding, setIsAdding] = useState(false)
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
 
   const short = (a: string) => a.slice(0, 6) + "..." + a.slice(-4)
 
@@ -81,12 +84,64 @@ export const IdentityHub: React.FC<{
         ))}
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-2">
-        <button
-          onClick={onAdd}
-          className="mt-6 py-4 bg-white text-black font-black rounded-2xl text-[10px] tracking-[0.3em] hover:scale-[1.02] transition-all flex items-center gap-2 justify-center w-full">
-          <Plus className="w-3 h-3" /> CREATE NEW ACCOUNT
-        </button>
+      <div className="mt-6 flex flex-col gap-3">
+        {!isAdding ? (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="py-4 bg-white text-black font-black rounded-2xl text-[10px] tracking-[0.3em] hover:scale-[1.02] transition-all flex items-center gap-2 justify-center w-full shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+            <Plus className="w-3 h-3" /> CREATE NEW ACCOUNT
+          </button>
+        ) : (
+          <div className="p-4 bg-white/[0.03] border border-white/10 rounded-2xl animate-fade-in">
+            <p className="text-white/40 text-[9px] uppercase tracking-widest mb-3">
+              Enter Password to Authorize
+            </p>
+            <input
+              autoFocus
+              type="password"
+              placeholder="Unlock Password..."
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                setError("")
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && password) {
+                  onAdd(password)
+                  setIsAdding(false)
+                  setPassword("")
+                }
+                if (e.key === "Escape") setIsAdding(false)
+              }}
+              className="w-full bg-white/[0.05] border border-white/10 focus:border-white/30 text-white placeholder-white/20 px-3 py-2.5 rounded-xl outline-none text-xs mb-3 transition-all font-mono"
+            />
+            {error && <p className="text-red-400 text-[10px] mb-3">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (password) {
+                    onAdd(password)
+                    setIsAdding(false)
+                    setPassword("")
+                  } else {
+                    setError("Password required")
+                  }
+                }}
+                className="flex-1 py-2 bg-white text-black font-bold rounded-lg text-[10px] hover:bg-white/90">
+                CONFIRM
+              </button>
+              <button
+                onClick={() => {
+                  setIsAdding(false)
+                  setPassword("")
+                  setError("")
+                }}
+                className="flex-1 py-2 bg-white/5 border border-white/10 text-white/50 font-bold rounded-lg text-[10px] hover:bg-white/10">
+                CANCEL
+              </button>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onImportKey}
