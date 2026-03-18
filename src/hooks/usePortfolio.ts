@@ -8,6 +8,8 @@ import {
 } from "viem"
 import { arbitrum, base, bsc, mainnet, optimism, polygon } from "viem/chains"
 
+import { ALCHEMY_KEY, SUPPORTED_CHAINS } from "~core/networks"
+
 const COINGECKO_PLATFORM: Record<string, string> = {
   ethereum: "ethereum",
   polygon: "polygon-pos",
@@ -15,71 +17,6 @@ const COINGECKO_PLATFORM: Record<string, string> = {
   optimism: "optimistic-ethereum",
   base: "base"
 }
-
-const ALCHEMY_KEY =
-  process.env.PLASMO_PUBLIC_ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY
-
-const SUPPORTED_CHAINS = [
-  {
-    id: "ethereum",
-    coingeckoId: "ethereum",
-    chain: mainnet,
-    name: "Ethereum",
-    rpc: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    alchemyUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    nativeSymbol: "ETH",
-    logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png"
-  },
-  {
-    id: "bsc",
-    coingeckoId: "binancecoin",
-    chain: bsc,
-    name: "BNB Chain",
-    rpc: "https://rpc.ankr.com/bsc",
-    nativeSymbol: "BNB",
-    logo: "https://cryptologos.cc/logos/binance-coin-bnb-logo.png"
-  },
-  {
-    id: "arbitrum",
-    coingeckoId: "ethereum",
-    chain: arbitrum,
-    name: "Arbitrum",
-    rpc: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    alchemyUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    nativeSymbol: "ETH",
-    logo: "https://cryptologos.cc/logos/arbitrum-arb-logo.png"
-  },
-  {
-    id: "optimism",
-    coingeckoId: "ethereum",
-    chain: optimism,
-    name: "Optimism",
-    rpc: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    alchemyUrl: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    nativeSymbol: "ETH",
-    logo: "https://cryptologos.cc/logos/optimism-ethereum-op-logo.png"
-  },
-  {
-    id: "polygon",
-    coingeckoId: "matic-network",
-    chain: polygon,
-    name: "Polygon",
-    rpc: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    alchemyUrl: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    nativeSymbol: "MATIC",
-    logo: "https://cryptologos.cc/logos/polygon-matic-logo.png"
-  },
-  {
-    id: "base",
-    coingeckoId: "ethereum",
-    chain: base,
-    name: "Base",
-    rpc: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    alchemyUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    nativeSymbol: "ETH",
-    logo: "https://assets.coingecko.com/coins/images/69370/standard/base.png"
-  }
-]
 
 export type TokenInfo = {
   symbol: string

@@ -15,6 +15,11 @@ export const generateMnemonic = () => {
   return mnemonic
 }
 
+/**
+ * Function to add a new account to the wallet
+ * @param password
+ * @returns updated accounts list
+ */
 export const addNextAccount = async (password: string) => {
   const res = await chrome.storage.local.get([
     "zeno_vault",
@@ -48,6 +53,13 @@ export const addNextAccount = async (password: string) => {
   return updated
 }
 
+/**
+ * Function to import an external account to the wallet
+ * @param type
+ * @param value
+ * @param name
+ * @returns updated accounts list
+ */
 export const importExternalAccount = async (
   type: "key" | "mnemonic",
   value: string,
@@ -78,4 +90,35 @@ export const importExternalAccount = async (
     zeno_address: address
   })
   return updated
+}
+
+/**
+ * Function to remove an account from the wallet
+ * @param addressToRemove
+ * @returns updated accounts list
+ */
+export const removeAccount = async (addressToRemove: string) => {
+  const res = await chrome.storage.local.get(["zeno_accounts", "zeno_address"])
+  const accounts = res.zeno_accounts || []
+  // Block deletion if the wallet only has one account remaining.
+  if (accounts.length === 1) throw new Error("Cannot remove last account")
+
+  // Filter accounts to remove the one to be deleted
+  const updatedAccounts = accounts.filter(
+    (a: any) => a.address.toLowerCase() !== addressToRemove.toLowerCase()
+  )
+
+  // If the deleted account was the active account, set the first account as active
+  let newActiveAddress = res.zeno_address
+  if (newActiveAddress.toLowerCase() === addressToRemove.toLowerCase()) {
+    newActiveAddress = updatedAccounts[0].address
+  }
+
+  // save in storage
+  await chrome.storage.local.set({
+    zeno_accounts: updatedAccounts,
+    zeno_address: newActiveAddress
+  })
+
+  return { updatedAccounts, newActiveAddress }
 }

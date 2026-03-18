@@ -45,16 +45,25 @@ function IndexPopup() {
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [autoLock, setAutoLock] = useState("1")
 
+  const handleSetProMode = (value: boolean) => {
+    setProMode(value)
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      chrome.storage.local.set({ zeno_pro_mode: value })
+    }
+  }
+
   useEffect(() => {
     const initApp = async () => {
       if (typeof chrome !== "undefined" && chrome.storage?.local) {
         const res = await chrome.storage.local.get([
           "zeno_onboarded",
           "zeno_timestamp",
-          "zeno_lock_limit"
+          "zeno_lock_limit",
+          "zeno_pro_mode"
         ])
 
         if (res.zeno_onboarded) {
+          setProMode(res.zeno_pro_mode || false)
           // Check time limit
           const limitValue = res.zeno_lock_limit || "15"
           const lockLimit =
@@ -129,11 +138,11 @@ function IndexPopup() {
           <DashboardScreen
             setScreen={setScreen}
             proMode={proMode}
-            setProMode={setProMode}
+            setProMode={handleSetProMode}
           />
         )
       case "send":
-        return <SendScreen setScreen={setScreen} />
+        return <SendScreen setScreen={setScreen} proMode={proMode} />
       case "receive":
         return <ReceiveScreen setScreen={setScreen} />
       case "swap":
@@ -145,7 +154,7 @@ function IndexPopup() {
           <SettingsScreen
             setScreen={setScreen}
             proMode={proMode}
-            setProMode={setProMode}
+            setProMode={handleSetProMode}
           />
         )
       case "unlock":

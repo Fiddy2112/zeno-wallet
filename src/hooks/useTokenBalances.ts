@@ -1,17 +1,17 @@
 import { erc20Abi, formatUnits } from "viem"
 
-import { getClient, SUPPORTED_CHAINS } from "~core/networks"
+import { getClient } from "~core/networks"
 
 export const fetchAllBalances = async (
   walletAddress: `0x${string}`,
-  chainKey: keyof typeof SUPPORTED_CHAINS,
+  chainId: string,
   tokenList: { address: string; decimals: number; symbol: string }[]
 ) => {
-  const client = getClient(chainKey)
+  const client = getClient(chainId)
 
   const contracts = tokenList.map((token) => ({
     address: token.address as `0x${string}`,
-    abi: erc20Abi as any,
+    abi: erc20Abi,
     functionName: "balanceOf",
     args: [walletAddress]
   }))

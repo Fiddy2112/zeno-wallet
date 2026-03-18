@@ -12,7 +12,11 @@ import { TokenCard } from "~components/TokenCard"
 import { askZeno } from "~features/ai-service"
 import { notify } from "~features/notifications"
 import { useDashboardTour } from "~features/useDashboardTour"
-import { addNextAccount } from "~features/wallet-logic"
+import {
+  addNextAccount,
+  importExternalAccount,
+  removeAccount
+} from "~features/wallet-logic"
 import { useNetworkPortfolio } from "~hooks/usePortfolio"
 import { mapToToken, type Screen, type Token } from "~types"
 
@@ -142,6 +146,38 @@ export const DashboardScreen: React.FC<Props> = ({
     }
   }
 
+  const handleImportIdentity = async (
+    type: "key" | "mnemonic",
+    value: string,
+    name: string
+  ) => {
+    try {
+      const updated = await importExternalAccount(type, value, name)
+      setAccounts(updated)
+      notify.success("Account imported successfully!", "dark", 3000)
+    } catch (error) {
+      notify.error(error.message || "Failed to import account.", "dark", 3000)
+      throw error
+    }
+  }
+
+  const handleRemoveIdentity = async (addrToRemove: string) => {
+    try {
+      const { updatedAccounts, newActiveAddress } =
+        await removeAccount(addrToRemove)
+      setAccounts(updatedAccounts)
+      // If you accidentally delete the currently selected example,
+      // the Console will automatically switch to a different example.
+      if (address.toLowerCase() === addrToRemove.toLowerCase()) {
+        setAddress(newActiveAddress)
+      }
+      notify.success("Account remove successfully!", "dark", 3000)
+    } catch (error: any) {
+      notify.error(error.message || "Failed to remove account.", "dark", 3000)
+      throw error
+    }
+  }
+
   return (
     <>
       {/* IdentityHub */}
@@ -155,6 +191,8 @@ export const DashboardScreen: React.FC<Props> = ({
             setShowHub(false)
           }}
           onAdd={handleAddIdentity}
+          onImport={handleImportIdentity}
+          onRemove={handleRemoveIdentity}
           onClose={() => setShowHub(false)}
         />
       )}

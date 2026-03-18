@@ -153,7 +153,9 @@ export const SetupPasswordScreen: React.FC<Props> = ({
           </p>
         </div>
         <button
-          onClick={handleSubmit}
+          onKeyDown={(e: React.KeyboardEvent) =>
+            e.key === "Enter" && handleSubmit()
+          }
           className="w-full py-3.5 bg-white text-black font-bold rounded-xl text-sm tracking-wide hover:bg-white/90 transition-all active:scale-[0.98]">
           CONTINUE
         </button>

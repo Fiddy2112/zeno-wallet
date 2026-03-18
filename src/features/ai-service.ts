@@ -1,3 +1,5 @@
+const PROXY_URL = "https://zeno-ai-proxy.vercel.app/api/chat"
+
 export const askZeno = async (userInput: string, context: any) => {
   const SYSTEM_PROMPT = `
     You are Zeno Core, an AI inside a crypto wallet.
