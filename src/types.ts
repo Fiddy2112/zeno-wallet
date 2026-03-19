@@ -47,3 +47,15 @@ const getDefaultLogo = (symbol: string) => {
 
   return map[symbol] || map["ETH"]
 }
+
+export interface VMAdapter {
+  type: string
+
+  deriveAddress(seed: string, index?: number): string
+
+  getBalance(address: string, chainConfig: any): Promise<string>
+
+  sendTx(params: any): Promise<string>
+
+  getTokens?(address: string, chainConfig: any): Promise<any[]>
+}

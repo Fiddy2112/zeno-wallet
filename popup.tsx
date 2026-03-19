@@ -146,7 +146,7 @@ function IndexPopup() {
       case "receive":
         return <ReceiveScreen setScreen={setScreen} />
       case "swap":
-        return <SwapScreen setScreen={setScreen} />
+        return <SwapScreen setScreen={setScreen} proMode={proMode} />
       case "ai":
         return <AIGuardianScreen setScreen={setScreen} />
       case "settings":

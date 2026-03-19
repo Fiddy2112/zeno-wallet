@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react"
-import {
-  createPublicClient,
-  formatEther,
-  formatUnits,
-  http,
-  isAddress
-} from "viem"
-import { arbitrum, base, bsc, mainnet, optimism, polygon } from "viem/chains"
+import { isAddress } from "viem"
 
-import { ALCHEMY_KEY, SUPPORTED_CHAINS } from "~core/networks"
+import { getAdapter, SUPPORTED_CHAINS } from "~core/networks"
 
 const COINGECKO_PLATFORM: Record<string, string> = {
   ethereum: "ethereum",
@@ -35,6 +28,7 @@ export type NetworkGroup = {
   tokens: TokenInfo[]
 }
 
+// Multi VM
 export const useNetworkPortfolio = (walletAddress?: string) => {
   const [networkGroups, setNetworkGroups] = useState<NetworkGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -52,50 +46,46 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
       setIsLoading(true)
 
       try {
-        // Fetch native prices
+        // Fetch native prices (Coingecko)
         const coingeckoIds = Array.from(
           new Set(SUPPORTED_CHAINS.map((c) => c.coingeckoId))
         ).join(",")
-
-        const prices = await fetch(
+        const prices: Record<string, { usd: number }> = await fetch(
           `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds}&vs_currencies=usd`
         ).then((r) => r.json())
 
+        // Loop each chain
         const results = await Promise.all<NetworkGroup | null>(
           SUPPORTED_CHAINS.map(async (chain) => {
             try {
-              const publicClient = createPublicClient({
-                chain: chain.chain,
-                transport: http(chain.rpc)
-              })
+              const { adapter, config } = getAdapter(chain.id)
+              let tokens: TokenInfo[] = []
+              let totalUsd = 0
 
-              let chainTokens: TokenInfo[] = []
-              let chainTotalUsd = 0
+              // Native token
+              const nativeBalance = await adapter.getBalance(
+                walletAddress,
+                config
+              )
+              if (Number(nativeBalance) > 0.000001) {
+                const nativePrice = prices[chain.coingeckoId]?.usd || 0
+                const usdValue = Number(nativeBalance) * nativePrice
+                totalUsd += usdValue
 
-              // ===== Native =====
-              const nativeBalBigInt = await publicClient.getBalance({
-                address: walletAddress as `0x${string}`
-              })
-              const native = Number(formatEther(nativeBalBigInt))
-              const nativePrice = prices[chain.coingeckoId]?.usd || 0
-
-              if (native > 0) {
-                const usd = native * nativePrice
-                chainTotalUsd += usd
-
-                chainTokens.push({
+                tokens.push({
                   symbol: chain.nativeSymbol,
                   address: "native",
-                  balance: native,
+                  balance: Number(nativeBalance),
                   price: nativePrice,
-                  usdValue: usd,
+                  usdValue,
                   logo: chain.logo
                 })
               }
 
-              // ===== ERC20 =====
-              if (chain.alchemyUrl && ALCHEMY_KEY) {
-                const res = await fetch(chain.alchemyUrl, {
+              // ERC20 tokens only for EVM
+              if (config.vmType === "EVM" && chain.alchemyUrl) {
+                // Alchemy batch fetch
+                const tokenRes = await fetch(chain.alchemyUrl, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -108,106 +98,78 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                   .then((r) => r.json())
                   .catch(() => null)
 
-                const tokens = res?.result?.tokenBalances || []
-
-                const filtered = tokens
-                  .filter(
-                    (t: any) =>
-                      t.tokenBalance !== "0x0" &&
-                      t.tokenBalance !==
-                        "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  )
+                const tokenBalances = tokenRes?.result?.tokenBalances || []
+                const filtered = tokenBalances
+                  .filter((t: any) => t.tokenBalance !== "0x0")
                   .slice(0, 20)
 
-                // metadata parallel
-                const metaTokens = await Promise.all(
-                  filtered.map(async (t: any) => {
-                    try {
-                      const metaRes = await fetch(chain.alchemyUrl!, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          jsonrpc: "2.0",
-                          method: "alchemy_getTokenMetadata",
-                          params: [t.contractAddress],
-                          id: 1
-                        })
-                      }).then((r) => r.json())
+                // batch metadata fetch
+                const metaPromises = filtered.map(async (t: any) => {
+                  try {
+                    const metaRes = await fetch(chain.alchemyUrl!, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "alchemy_getTokenMetadata",
+                        params: [t.contractAddress],
+                        id: 1
+                      })
+                    }).then((r) => r.json())
 
-                      const meta = metaRes?.result
+                    const meta = metaRes?.result
+                    if (!meta?.decimals) return null
+                    const balance = Number(t.tokenBalance) / 10 ** meta.decimals
+                    if (balance <= 0) return null
 
-                      if (!meta?.decimals) return null
-
-                      const balance = Number(
-                        formatUnits(t.tokenBalance, meta.decimals)
-                      )
-
-                      if (balance <= 0) return null
-
-                      return {
-                        address: t.contractAddress.toLowerCase(),
-                        symbol: meta.symbol,
-                        balance,
-                        price: 0,
-                        usdValue: 0,
-                        logo: meta.logo
-                      }
-                    } catch {
-                      return null
-                    }
-                  })
-                )
-
-                const cleanTokens = metaTokens.filter(Boolean) as TokenInfo[]
-
-                // ===== Prices =====
-                if (cleanTokens.length > 0) {
-                  const platform = COINGECKO_PLATFORM[chain.id]
-
-                  if (platform) {
-                    const addresses = cleanTokens
-                      .map((t) => t.address)
-                      .join(",")
-
-                    const priceData = await fetch(
-                      `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${addresses}&vs_currencies=usd`
-                    )
-                      .then((r) => r.json())
-                      .catch(() => ({}))
-
-                    const priceObj =
-                      priceData && typeof priceData === "object"
-                        ? priceData
-                        : {}
-
-                    cleanTokens.forEach((t) => {
-                      const p = priceObj[t.address]?.usd || 0
-                      t.price = p
-                      t.usdValue = t.balance * p
-                    })
-
-                    // filter rác
-                    const valuable = cleanTokens.filter(
-                      (t) => t.usdValue > 0.01
-                    )
-
-                    valuable.forEach((t) => {
-                      chainTotalUsd += t.usdValue
-                    })
-
-                    chainTokens.push(...valuable)
+                    return {
+                      address: t.contractAddress.toLowerCase(),
+                      symbol: meta.symbol,
+                      balance,
+                      price: 0,
+                      usdValue: 0,
+                      logo: meta.logo
+                    } as TokenInfo
+                  } catch {
+                    return null
                   }
+                })
+
+                const erc20Tokens = (await Promise.all(metaPromises)).filter(
+                  Boolean
+                ) as TokenInfo[]
+
+                // fetch ERC20 prices
+                const platform = COINGECKO_PLATFORM[chain.id]
+                if (platform && erc20Tokens.length) {
+                  const addresses = erc20Tokens.map((t) => t.address).join(",")
+                  const priceData = await fetch(
+                    `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${addresses}&vs_currencies=usd`
+                  )
+                    .then((r) => r.json())
+                    .catch(() => ({}))
+
+                  erc20Tokens.forEach((t) => {
+                    const p = priceData[t.address]?.usd || 0
+                    t.price = p
+                    t.usdValue = t.balance * p
+                  })
+
+                  const valuable = erc20Tokens.filter((t) => t.usdValue > 0.01)
+                  valuable.forEach((t) => {
+                    totalUsd += t.usdValue
+                  })
+                  tokens.push(...valuable)
                 }
               }
 
-              if (chainTokens.length === 0) return null
-
+              if (!tokens.length) return null
               return {
                 chainId: chain.id,
                 chainName: chain.name,
                 chainLogo: chain.logo,
-                totalUsd: chainTotalUsd,
-                tokens: chainTokens.sort((a, b) => b.usdValue - a.usdValue)
+                totalUsd,
+                tokens: tokens.sort((a, b) => b.usdValue - a.usdValue)
               }
             } catch {
               return null
@@ -230,7 +192,6 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
     }
 
     fetchPortfolio()
-
     return () => {
       cancelled = true
     }

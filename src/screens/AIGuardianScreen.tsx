@@ -1,7 +1,9 @@
-import { ArrowLeftIcon, ArrowUpIcon } from "lucide-react"
+import { ArrowLeftIcon, ArrowUpIcon, Bot } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
 
 import { AIMessage, type Message } from "~components/AIMessage"
+import { askZeno } from "~features/ai-service"
+import { useNetworkPortfolio } from "~hooks/usePortfolio"
 import type { Screen } from "~types"
 
 interface Props {
@@ -12,10 +14,6 @@ const INITIAL: Message[] = [
   {
     role: "ai",
     text: "Hey! I'm your Zeno AI Guardian. I monitor your wallet 24/7 for threats, analyze transactions before you sign, and give you real-time DeFi alpha. How can I help?"
-  },
-  {
-    role: "ai",
-    text: "Your portfolio is up 2.11% today. No suspicious activity detected. MEV protection has saved you an estimated $12.40 this week."
   }
 ]
 
@@ -26,83 +24,130 @@ const QUICK = [
   "DeFi opportunities"
 ]
 
-const RESPONSES: Record<string, string> = {
-  "Is my wallet safe?":
-    "✅ All clear! No phishing approvals, no honeypot tokens, and no suspicious contract interactions detected in the last 30 days.",
-  "Analyze last transaction":
-    "Your last tx was a swap of 0.5 ETH → 1,256 USDC on Uniswap V3. Price impact was 0.02%. No MEV detected. Gas was optimal at that block.",
-  "What's the gas now?":
-    "⛽ Current gas: Base 12 gwei | Priority 1 gwei. A standard ETH transfer costs ≈ $0.42. Good time to transact.",
-  "DeFi opportunities":
-    "🔥 Top opportunities right now: 1) ETH/USDC on Uniswap V3 — 8.2% APR. 2) stETH yield — 4.1% APR. 3) ARB governance airdrop window open."
-}
-
 export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
   const [messages, setMessages] = useState<Message[]>(INITIAL)
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Get data value
+  const [address, setAddress] = useState<string>("")
+  const { networkGroups } = useNetworkPortfolio(address)
+
+  const totalUsdValue = Number(
+    networkGroups.reduce((sum, group) => sum + (group.totalUsd || 0), 0) || 0
+  )
+
+  useEffect(() => {
+    chrome.storage.local.get("zeno_address", (res) => {
+      if (res.zeno_address) setAddress(res.zeno_address)
+    })
+  }, [])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const send = (text: string) => {
+  // hand send message
+  const send = async (text: string) => {
     if (!text.trim() || loading) return
+
+    // Show user message
     const userMsg: Message = { role: "user", text }
     setMessages((prev) => [...prev, userMsg])
     setInput("")
     setLoading(true)
-    setTimeout(() => {
-      const reply =
-        RESPONSES[text] ||
-        "I'm analyzing that for you... In the meantime, remember: always verify contract addresses on Etherscan before signing any transaction."
-      setMessages((prev) => [...prev, { role: "ai", text: reply }])
+
+    try {
+      // Call Zeno AI on Vercel with real wallet context
+      const result = await askZeno(text, {
+        user_address: address,
+        user_balance: totalUsdValue,
+        tokens: networkGroups.flatMap((g) => g.tokens)
+      })
+
+      // Show AI response
+      setMessages((prev) => [...prev, { role: "ai", text: result.ai_response }])
+
+      // Handle Intent Routing
+      if (result.intent === "SEND" || result.intent === "SWAP") {
+        if (result.params) {
+          // Save extracted data into Storage
+          await chrome.storage.local.set({ pending_tx: result.params })
+        }
+
+        // Delay 1.5s for user to read AI confirmation message before redirecting
+        setTimeout(() => {
+          setScreen(result.intent === "SEND" ? "send" : "swap")
+        }, 1500)
+      }
+
+      // Show risk analysis
+      if (result.risk_analysis?.score > 0.7) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            text: `⚠️ CẢNH BÁO RỦI RO: ${result.risk_analysis.reason}`
+          }
+        ])
+      }
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text: "Zeno network is currently congested. Please try again in a moment."
+        }
+      ])
+    } finally {
       setLoading(false)
-    }, 900)
+    }
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden h-full bg-[#080808]">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.05] flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.05] flex-shrink-0 bg-black/40 backdrop-blur-md relative z-10">
         <button
           onClick={() => setScreen("dashboard")}
-          className="w-8 h-8 glass rounded-xl flex items-center justify-center text-white/50 hover:text-white transition-colors">
-          <ArrowLeftIcon className="w-4 h-4" />
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-all">
+          <ArrowLeftIcon className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-sm italic">
-            Z
+          <div className="w-8 h-8 bg-emerald-400/10 border border-emerald-400/20 rounded-full flex items-center justify-center text-emerald-400">
+            <Bot className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-white text-sm font-semibold leading-none">
-              Zeno AI Guardian
+            <p className="text-white text-sm font-black tracking-wider uppercase leading-none">
+              Zeno Nexus
             </p>
-            <p className="text-emerald-400 text-[10px] mt-0.5 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />
-              Active — monitoring wallet
+            <p className="text-emerald-400 text-[9px] font-bold tracking-widest mt-1 flex items-center gap-1.5 uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Active Monitoring
             </p>
           </div>
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar">
         {messages.map((m, i) => (
           <AIMessage key={i} msg={m} />
         ))}
+
+        {/* Loading Indicator siêu ngầu */}
         {loading && (
           <div className="flex gap-2 justify-start animate-fade-in">
-            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs flex-shrink-0 italic">
-              Z
+            <div className="w-8 h-8 rounded-full bg-emerald-400/10 border border-emerald-400/20 flex items-center justify-center flex-shrink-0 text-emerald-400">
+              <Bot className="w-4 h-4" />
             </div>
-            <div className="glass px-4 py-3 rounded-2xl rounded-tl-sm">
-              <div className="flex gap-1">
+            <div className="bg-[#121212] border border-white/5 px-4 py-3.5 rounded-2xl rounded-tl-sm">
+              <div className="flex gap-1.5 items-center h-2">
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
-                    className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce"
+                    className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce"
                     style={{ animationDelay: `${i * 0.15}s` }}
                   />
                 ))}
@@ -113,33 +158,35 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
         <div ref={bottomRef} />
       </div>
 
-      {/* Quick actions */}
-      <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto flex-shrink-0">
+      {/* Quick Actions */}
+      <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto custom-scrollbar flex-shrink-0">
         {QUICK.map((q) => (
           <button
             key={q}
             onClick={() => send(q)}
-            className="text-[10px] text-white/50 border border-white/10 px-2.5 py-1.5 rounded-full flex-shrink-0 hover:border-white/30 hover:text-white/80 transition-all whitespace-nowrap">
+            disabled={loading}
+            className="text-[10px] text-white/50 border border-white/10 bg-[#121212] px-3 py-2 rounded-full flex-shrink-0 hover:border-white/30 hover:text-white/80 transition-all whitespace-nowrap active:scale-95 disabled:opacity-50 font-bold tracking-wide">
             {q}
           </button>
         ))}
       </div>
 
-      {/* Input */}
-      <div className="px-3 pb-3 flex-shrink-0">
-        <div className="flex gap-2 glass rounded-xl p-1.5">
+      {/* Input Area */}
+      <div className="px-3 pb-4 flex-shrink-0">
+        <div className="flex gap-2 bg-[#121212] border border-white/10 focus-within:border-emerald-400/30 transition-colors rounded-2xl p-1.5">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send(input)}
-            placeholder="Ask Zeno anything..."
-            className="flex-1 bg-transparent text-white text-sm placeholder-white/20 px-2 outline-none"
+            placeholder="Ask Zeno to send, swap, or analyze..."
+            disabled={loading}
+            className="flex-1 bg-transparent text-white text-sm placeholder-white/20 px-3 outline-none disabled:opacity-50"
           />
           <button
             onClick={() => send(input)}
-            disabled={!input.trim()}
-            className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-black font-bold hover:bg-white/90 transition-all active:scale-95 disabled:opacity-30 text-sm flex-shrink-0">
-            <ArrowUpIcon className="w-4 h-4" />
+            disabled={!input.trim() || loading}
+            className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-black font-bold hover:bg-white/90 transition-all active:scale-95 disabled:opacity-20 disabled:bg-white/10 disabled:text-white/30 flex-shrink-0 shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+            <ArrowUpIcon className="w-5 h-5" />
           </button>
         </div>
       </div>
