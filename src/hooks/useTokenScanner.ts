@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react"
 
 export const useTokenScanner = (address: string) => {
-  const [tokens, setTokens] = useState([])
+  const [tokens, setTokens] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+
+  const apiKey = process.env.PLASMO_PUBLIC_ALCHEMY_API_KEY
 
   const scanTokens = async () => {
     if (!address) return
     setLoading(true)
     try {
-      const apiKey = `${process.env.ALCHEMY_API_KEY}`
       const response = await fetch(
         `https://eth-mainnet.g.alchemy.com/v2/${apiKey}`,
         {
@@ -25,7 +26,7 @@ export const useTokenScanner = (address: string) => {
         }
       )
       const data = await response.json()
-      setTokens(data.result)
+      setTokens(data.result?.tokenBalances || [])
     } catch (error) {
       console.error("Scan failed", error)
     } finally {

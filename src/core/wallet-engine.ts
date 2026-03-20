@@ -14,7 +14,7 @@ export const deriveWalletFromMnemonic = (
     // Define Derivation Path (Derivation Path) following BIP-44 standard
     // m / purpose' / coin_type' / account' / change / address_index
     // With Ethereum, coin_type is 60'
-    const path = `m/44'/60'/0'/0/0${accountIndex}`
+    const path = `m/44'/60'/0'/0/${accountIndex}`
     // Create HDNodeWallet (Family tree wallet)
     const hdNode = HDNodeWallet.fromMnemonic(mnemonicObj, path)
 

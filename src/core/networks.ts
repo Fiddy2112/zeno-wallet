@@ -1,4 +1,12 @@
-import { createPublicClient, defineChain, http } from "viem"
+import {
+  createPublicClient,
+  createWalletClient,
+  defineChain,
+  formatEther,
+  http,
+  parseEther
+} from "viem"
+import { privateKeyToAccount } from "viem/accounts"
 import {
   arbitrum,
   base,
@@ -30,8 +38,6 @@ export type ChainConfig = {
   nativeSymbol: string
   logo: string
   vmType: VMType
-
-  // future-proof
   derivationPath?: string
 }
 
@@ -176,8 +182,6 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     vmType: "EVM",
     derivationPath: "m/44'/60'/0'/0/0"
   },
-
-  // FUTURE VM READY
   {
     id: "solana",
     coingeckoId: "solana",
@@ -202,12 +206,9 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   }
 ]
 
-// Chain Helpers
 export const getChainConfig = (networkId: string): ChainConfig => {
   return SUPPORTED_CHAINS.find((c) => c.id === networkId) || SUPPORTED_CHAINS[0]
 }
-
-// VM Registry
 
 export const getClient = (networkId: string) => {
   const config = getChainConfig(networkId)
@@ -215,6 +216,15 @@ export const getClient = (networkId: string) => {
     chain: config.chain,
     transport: http(config.rpc)
   })
+}
+
+// SendTx params type
+export type SendTxParams = {
+  privateKey: string
+  to: string
+  value: string
+  chainId: string
+  gasPrice?: bigint
 }
 
 export class EVMAdapter implements VMAdapter {
@@ -226,28 +236,51 @@ export class EVMAdapter implements VMAdapter {
   }
 
   async getBalance(address: string, chainConfig: any): Promise<string> {
-    // Cast to ChainConfig to access id
     const config = chainConfig as ChainConfig
     const client = getClient(config.id)
     const balance = await client.getBalance({
       address: address as `0x${string}`
     })
-    return balance.toString()
+    return formatEther(balance)
   }
 
-  async sendTx(params: any): Promise<string> {
-    // Logic for sending transaction would go here
-    return "0x..."
+  async sendTx(params: SendTxParams): Promise<string> {
+    const config = getChainConfig(params.chainId)
+
+    if (!config.chain) {
+      throw new Error(`Chain ${params.chainId} not supported for sending yet`)
+    }
+
+    // Build account from private key
+    const account = privateKeyToAccount(params.privateKey as `0x${string}`)
+
+    // WalletClient for signing + broadcasting
+    const walletClient = createWalletClient({
+      account,
+      chain: config.chain,
+      transport: http(config.rpc)
+    })
+
+    // PublicClient for gas estimation fallback
+    const publicClient = getClient(params.chainId)
+    const gasPrice = params.gasPrice ?? (await publicClient.getGasPrice())
+
+    const hash = await walletClient.sendTransaction({
+      to: params.to as `0x${string}`,
+      value: parseEther(params.value),
+      gasPrice,
+      type: "legacy"
+    } as any)
+
+    return hash
   }
 }
 
 export const VM_REGISTRY: Record<string, VMAdapter | null> = {
   EVM: new EVMAdapter(),
-  SVM: null, // soon
-  BVM: null // soon
+  SVM: null,
+  BVM: null
 }
-
-// Main Entry
 
 export const getAdapter = (networkId: string) => {
   const config = getChainConfig(networkId)

@@ -68,7 +68,6 @@ export const importExternalAccount = async (
   const res = await chrome.storage.local.get(["zeno_accounts"])
   const accounts = res.zeno_accounts || []
   let address = ""
-  let secretToStore = value
 
   if (type === "key") {
     const account = privateKeyToAccount(value as `0x${string}`)

@@ -26,7 +26,6 @@ export const ImportWalletScreen: React.FC<Props> = ({
       )
       return
     }
-    localStorage.setItem("zeno_onboarded", "true")
     setFlow("import")
     setImportedPhrase(phrase.trim())
     setScreen("setup-pass")
@@ -45,7 +44,6 @@ export const ImportWalletScreen: React.FC<Props> = ({
         Enter your 12 or 24-word secret recovery phrase, separated by spaces.
       </p>
 
-      {/* Textarea */}
       <div className="relative mb-2">
         <textarea
           value={phrase}
@@ -59,8 +57,12 @@ export const ImportWalletScreen: React.FC<Props> = ({
         />
         {words.length > 0 && (
           <div
-            className={`absolute bottom-3 right-3 text-[10px] font-mono px-2 py-0.5 rounded-full border ${isValid ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/5" : "text-white/30 border-white/10"}`}>
-            {words.length}/12
+            className={`absolute bottom-3 right-3 text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+              isValid
+                ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/5"
+                : "text-white/30 border-white/10"
+            }`}>
+            {words.length}/{words.length <= 12 ? "12" : "24"}
           </div>
         )}
       </div>

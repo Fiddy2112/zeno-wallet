@@ -5,19 +5,21 @@ import {
   Plus,
   Repeat
 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 
+import { ChainSelector, type ChainFilter } from "~components/ChainSelector"
 import { IdentityHub } from "~components/IdentityHub"
 import { TokenCard } from "~components/TokenCard"
 import { SUPPORTED_CHAINS } from "~core/networks"
 import { askZeno } from "~features/ai-service"
 import { notify } from "~features/notifications"
-import { useDashboardTour } from "~features/useDashboardTour"
+import { getCachedPriceWithChange } from "~features/price-cache"
 import {
   addNextAccount,
   importExternalAccount,
   removeAccount
 } from "~features/wallet-logic"
+import { useDashboardTour } from "~hooks/useDashboardTour"
 import { useNetworkPortfolio } from "~hooks/usePortfolio"
 import { mapToToken, type Screen } from "~types"
 
@@ -36,24 +38,25 @@ export const DashboardScreen: React.FC<Props> = ({
 }) => {
   const { startTour, shouldAutoStart } = useDashboardTour()
 
-  // States
   const [showHub, setShowHub] = useState(false)
   const [accounts, setAccounts] = useState<any[]>([])
   const [address, setAddress] = useState<string>("")
-
-  // AI Input
   const [aiInput, setAiInput] = useState("")
   const [isAiProcessing, setIsAiProcessing] = useState(false)
-
-  // Market proxy
   const [marketData, setMarketData] = useState({ change24h: 0 })
+  const [chainFilter, setChainFilter] = useState<ChainFilter>("all")
 
-  // Multi-chain portfolio
   const { networkGroups, isLoading } = useNetworkPortfolio(address)
 
-  // Total USD value
+  // Filter groups by selected chain
+  const filteredGroups =
+    chainFilter === "all"
+      ? networkGroups
+      : networkGroups.filter((g) => g.chainId === chainFilter)
+
+  // Total shows filtered value
   const totalUsdValue =
-    networkGroups?.reduce((sum, group) => sum + (group.totalUsd || 0), 0) || 0
+    filteredGroups?.reduce((sum, g) => sum + (g.totalUsd || 0), 0) || 0
   const totalUsdStr = totalUsdValue.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -65,15 +68,15 @@ export const DashboardScreen: React.FC<Props> = ({
     SUPPORTED_CHAINS.find((c) => c.id === activeChain)?.coingeckoId ||
     "ethereum"
 
-  // --- Tour Auto-start ---
   useEffect(() => {
-    if (shouldAutoStart()) {
-      const t = setTimeout(startTour, 600)
-      return () => clearTimeout(t)
-    }
+    shouldAutoStart().then((should) => {
+      if (should) {
+        const t = setTimeout(startTour, 600)
+        return () => clearTimeout(t)
+      }
+    })
   }, [])
 
-  // --- Load Accounts ---
   useEffect(() => {
     const loadAccounts = async () => {
       const res = await chrome.storage.local.get([
@@ -81,7 +84,6 @@ export const DashboardScreen: React.FC<Props> = ({
         "zeno_address"
       ])
       if (res.zeno_address) setAddress(res.zeno_address)
-
       if (!res.zeno_accounts && res.zeno_address) {
         const initial = [
           { name: "Account 1", address: res.zeno_address, index: 0 }
@@ -95,27 +97,16 @@ export const DashboardScreen: React.FC<Props> = ({
     loadAccounts()
   }, [])
 
-  // --- Fetch Market Proxy ---
   useEffect(() => {
-    const fetchMarketProxy = async () => {
+    const fetchMarket = async () => {
       try {
-        const res = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd&include_24hr_change=true`
-        )
-        const data = await res.json()
-
-        setMarketData({
-          change24h: data[coingeckoId]?.usd_24h_change || 0
-        })
-      } catch (error) {
-        console.log("Market fetch error:", error)
-      }
+        const { change24h } = await getCachedPriceWithChange(coingeckoId)
+        setMarketData({ change24h })
+      } catch {}
     }
-
-    fetchMarketProxy()
+    fetchMarket()
   }, [coingeckoId])
 
-  // --- AI Input Handler ---
   const handleAIInput = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter" || !aiInput.trim()) return
     setIsAiProcessing(true)
@@ -125,7 +116,6 @@ export const DashboardScreen: React.FC<Props> = ({
         user_balance: totalUsdValue,
         tokens: networkGroups.flatMap((g) => g.tokens)
       })
-
       if (result.intent === "SEND") {
         notify.success(result.ai_response, "dark", 3000)
         if (result.params)
@@ -134,11 +124,10 @@ export const DashboardScreen: React.FC<Props> = ({
       } else {
         notify.info(result.ai_response, "dark", 3000)
       }
-
       if (result.risk_analysis?.score > 0.7) {
         notify.error(`RISK WARNING: ${result.risk_analysis.reason}`)
       }
-    } catch (error) {
+    } catch {
       notify.error("Zeno is busy, try again later!")
     } finally {
       setIsAiProcessing(false)
@@ -146,7 +135,6 @@ export const DashboardScreen: React.FC<Props> = ({
     }
   }
 
-  // --- IdentityHub Handlers ---
   const handleAddIdentity = async (pass: string) => {
     if (!pass) return
     try {
@@ -178,9 +166,8 @@ export const DashboardScreen: React.FC<Props> = ({
       const { updatedAccounts, newActiveAddress } =
         await removeAccount(addrToRemove)
       setAccounts(updatedAccounts)
-      if (address.toLowerCase() === addrToRemove.toLowerCase()) {
+      if (address.toLowerCase() === addrToRemove.toLowerCase())
         setAddress(newActiveAddress)
-      }
       notify.success("Account removed successfully!", "dark", 3000)
     } catch (error: any) {
       notify.error(error.message || "Failed to remove account.", "dark", 3000)
@@ -188,10 +175,12 @@ export const DashboardScreen: React.FC<Props> = ({
     }
   }
 
-  // --- Render ---
+  const selectedChainName = SUPPORTED_CHAINS.find(
+    (c) => c.id === chainFilter
+  )?.name
+
   return (
     <>
-      {/* IdentityHub Modal */}
       {showHub && (
         <IdentityHub
           accounts={accounts}
@@ -210,7 +199,7 @@ export const DashboardScreen: React.FC<Props> = ({
 
       <div className="flex-1 flex flex-col overflow-hidden h-full">
         {/* Top Bar */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
+        <div className="flex items-center gap-2 justify-between px-4 pt-4 pb-2 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div
               id="tour-logo"
@@ -229,11 +218,8 @@ export const DashboardScreen: React.FC<Props> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <div id="tour-network" className="glass px-2 py-1 rounded-full">
-              <span className="text-white/50 text-[10px] font-mono leading-6">
-                Multi-chain
-              </span>
-            </div>
+            <ChainSelector selected={chainFilter} onChange={setChainFilter} />
+
             <button
               onClick={startTour}
               title="Start guided tour"
@@ -256,12 +242,13 @@ export const DashboardScreen: React.FC<Props> = ({
         {/* Total Balance */}
         <div id="tour-balance" className="px-4 py-4 text-center flex-shrink-0">
           <p className="text-white/30 text-xs uppercase tracking-widest mb-1">
-            Total Net Worth
+            {chainFilter === "all"
+              ? "Total Net Worth"
+              : `${selectedChainName} Balance`}
           </p>
           <h2 className="text-4xl font-black text-white tracking-tight mb-1">
             {isLoading ? "..." : `$${totalUsdStr}`}
           </h2>
-
           <div className="flex flex-col items-center gap-1">
             <span
               className={
@@ -327,8 +314,7 @@ export const DashboardScreen: React.FC<Props> = ({
             {
               label: "Buy",
               icon: <Plus className="w-5 h-5 text-emerald-400" />,
-              action: () =>
-                notify.info("Fiat on-ramp is coming soon!", "dark", 2000)
+              action: () => setScreen("buy")
             }
           ].map((a) => (
             <button
@@ -364,33 +350,32 @@ export const DashboardScreen: React.FC<Props> = ({
             <div className="text-center text-white/30 text-xs py-8 animate-pulse">
               Scanning multi-chain nexus...
             </div>
-          ) : networkGroups.length > 0 ? (
-            networkGroups.map((group) => (
+          ) : filteredGroups.length > 0 ? (
+            filteredGroups.map((group) => (
               <div key={group.chainId} className="mb-6 animate-fade-in">
-                {/* Network Header */}
-                <div className="flex items-center justify-between px-3 mb-2">
-                  <div className="flex items-center gap-2">
-                    <img
-                      src={group.chainLogo}
-                      alt={group.chainName}
-                      className="w-4 h-4 rounded-full"
-                      loading="lazy"
-                    />
-                    <span className="text-white/60 text-[10px] font-bold tracking-wider uppercase">
-                      {group.chainName}
+                {/* Chain header — hidden when filtered to single chain */}
+                {chainFilter === "all" && (
+                  <div className="flex items-center justify-between px-3 mb-2">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={group.chainLogo}
+                        alt={group.chainName}
+                        className="w-4 h-4 rounded-full"
+                        loading="lazy"
+                      />
+                      <span className="text-white/60 text-[10px] font-bold tracking-wider uppercase">
+                        {group.chainName}
+                      </span>
+                    </div>
+                    <span className="text-white/40 text-[10px] font-mono">
+                      $
+                      {group.totalUsd.toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })}
                     </span>
                   </div>
-                  <span
-                    className="text-white/40 text-[10px] font-mono cursor-default"
-                    title={`Total: $${group.totalUsd.toFixed(2)}\nTokens: ${group.tokens.length}`}>
-                    $
-                    {group.totalUsd.toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </span>
-                </div>
-
+                )}
                 <div className="space-y-1">
                   {group.tokens.map((token, index) => (
                     <TokenCard
@@ -406,7 +391,9 @@ export const DashboardScreen: React.FC<Props> = ({
             ))
           ) : (
             <div className="text-center text-white/20 text-xs py-8">
-              No assets found across networks.
+              {chainFilter === "all"
+                ? "No assets found across networks."
+                : `No assets on ${selectedChainName || "this network"}.`}
             </div>
           )}
         </div>

@@ -7,9 +7,11 @@ export type Screen =
   | "send"
   | "receive"
   | "swap"
+  | "buy"
   | "ai"
   | "settings"
   | "unlock"
+  | "history"
 
 export type Tab = "dashboard" | "send" | "receive" | "ai" | "settings"
 
@@ -44,18 +46,13 @@ const getDefaultLogo = (symbol: string) => {
     BNB: "https://cryptologos.cc/logos/binance-coin-bnb-logo.png",
     USDT: "https://cryptologos.cc/logos/tether-usdt-logo.png"
   }
-
   return map[symbol] || map["ETH"]
 }
 
 export interface VMAdapter {
   type: string
-
   deriveAddress(seed: string, index?: number): string
-
   getBalance(address: string, chainConfig: any): Promise<string>
-
   sendTx(params: any): Promise<string>
-
   getTokens?(address: string, chainConfig: any): Promise<any[]>
 }

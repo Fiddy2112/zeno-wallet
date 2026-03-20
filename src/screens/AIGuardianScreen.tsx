@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ArrowUpIcon, Bot } from "lucide-react"
+import { ArrowLeftIcon, ArrowUpIcon, Bot, Trash2 } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
 
 import { AIMessage, type Message } from "~components/AIMessage"
@@ -9,6 +9,9 @@ import type { Screen } from "~types"
 interface Props {
   setScreen: (s: Screen) => void
 }
+
+const STORAGE_KEY = "zeno_ai_history"
+const MAX_HISTORY = 20 // keep last 20 messages in storage
 
 const INITIAL: Message[] = [
   {
@@ -28,78 +31,103 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
   const [messages, setMessages] = useState<Message[]>(INITIAL)
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
+  const [address, setAddress] = useState<string>("")
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Get data value
-  const [address, setAddress] = useState<string>("")
   const { networkGroups } = useNetworkPortfolio(address)
-
-  const totalUsdValue = Number(
-    networkGroups.reduce((sum, group) => sum + (group.totalUsd || 0), 0) || 0
+  const totalUsdValue = networkGroups.reduce(
+    (sum, g) => sum + (g.totalUsd || 0),
+    0
   )
 
+  // Load persisted chat history on mount
   useEffect(() => {
-    chrome.storage.local.get("zeno_address", (res) => {
+    chrome.storage.local.get(["zeno_address", STORAGE_KEY], (res) => {
       if (res.zeno_address) setAddress(res.zeno_address)
+      if (res[STORAGE_KEY] && res[STORAGE_KEY].length > 0) {
+        setMessages(res[STORAGE_KEY])
+      }
     })
   }, [])
 
+  // Auto-scroll on new message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // hand send message
+  // Persist messages to storage (capped at MAX_HISTORY)
+  const saveHistory = (msgs: Message[]) => {
+    const toSave = msgs.slice(-MAX_HISTORY)
+    chrome.storage.local.set({ [STORAGE_KEY]: toSave })
+  }
+
+  const clearHistory = () => {
+    setMessages(INITIAL)
+    chrome.storage.local.remove(STORAGE_KEY)
+  }
+
+  // Build context string from recent messages for AI memory
+  const buildConversationContext = (msgs: Message[]) => {
+    const recent = msgs.slice(-6) // last 6 messages as context
+    return recent
+      .map((m) => `${m.role === "user" ? "User" : "Zeno"}: ${m.text}`)
+      .join("\n")
+  }
+
   const send = async (text: string) => {
     if (!text.trim() || loading) return
 
-    // Show user message
     const userMsg: Message = { role: "user", text }
-    setMessages((prev) => [...prev, userMsg])
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
+    saveHistory(updatedMessages)
     setInput("")
     setLoading(true)
 
     try {
-      // Call Zeno AI on Vercel with real wallet context
+      // Pass conversation context so AI has memory of prior turns
+      const conversationContext = buildConversationContext(messages)
+
       const result = await askZeno(text, {
         user_address: address,
         user_balance: totalUsdValue,
-        tokens: networkGroups.flatMap((g) => g.tokens)
+        tokens: networkGroups.flatMap((g) => g.tokens),
+        conversation_history: conversationContext // AI memory
       })
 
-      // Show AI response
-      setMessages((prev) => [...prev, { role: "ai", text: result.ai_response }])
+      const aiMsg: Message = { role: "ai", text: result.ai_response }
+      const withAi = [...updatedMessages, aiMsg]
+      setMessages(withAi)
+      saveHistory(withAi)
 
-      // Handle Intent Routing
+      // Intent routing
       if (result.intent === "SEND" || result.intent === "SWAP") {
         if (result.params) {
-          // Save extracted data into Storage
           await chrome.storage.local.set({ pending_tx: result.params })
         }
-
-        // Delay 1.5s for user to read AI confirmation message before redirecting
         setTimeout(() => {
           setScreen(result.intent === "SEND" ? "send" : "swap")
         }, 1500)
       }
 
-      // Show risk analysis
+      // Risk warning
       if (result.risk_analysis?.score > 0.7) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "ai",
-            text: `⚠️ CẢNH BÁO RỦI RO: ${result.risk_analysis.reason}`
-          }
-        ])
-      }
-    } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        {
+        const riskMsg: Message = {
           role: "ai",
-          text: "Zeno network is currently congested. Please try again in a moment."
+          text: `⚠️ RISK WARNING: ${result.risk_analysis.reason}`
         }
-      ])
+        const withRisk = [...withAi, riskMsg]
+        setMessages(withRisk)
+        saveHistory(withRisk)
+      }
+    } catch {
+      const errMsg: Message = {
+        role: "ai",
+        text: "Zeno network is currently congested. Please try again in a moment."
+      }
+      const withErr = [...updatedMessages, errMsg]
+      setMessages(withErr)
+      saveHistory(withErr)
     } finally {
       setLoading(false)
     }
@@ -114,7 +142,7 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
           className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white transition-all">
           <ArrowLeftIcon className="w-5 h-5" />
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1">
           <div className="w-8 h-8 bg-emerald-400/10 border border-emerald-400/20 rounded-full flex items-center justify-center text-emerald-400">
             <Bot className="w-4 h-4" />
           </div>
@@ -128,15 +156,23 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
             </p>
           </div>
         </div>
+        {/* Clear history button */}
+        {messages.length > 1 && (
+          <button
+            onClick={clearHistory}
+            title="Clear chat history"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white/20 hover:bg-white/10 hover:text-white/60 transition-all">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Messages Area */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar">
         {messages.map((m, i) => (
           <AIMessage key={i} msg={m} />
         ))}
 
-        {/* Loading Indicator siêu ngầu */}
         {loading && (
           <div className="flex gap-2 justify-start animate-fade-in">
             <div className="w-8 h-8 rounded-full bg-emerald-400/10 border border-emerald-400/20 flex items-center justify-center flex-shrink-0 text-emerald-400">
@@ -171,7 +207,7 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
         ))}
       </div>
 
-      {/* Input Area */}
+      {/* Input */}
       <div className="px-3 pb-4 flex-shrink-0">
         <div className="flex gap-2 bg-[#121212] border border-white/10 focus-within:border-emerald-400/30 transition-colors rounded-2xl p-1.5">
           <input
@@ -185,7 +221,7 @@ export const AIGuardianScreen: React.FC<Props> = ({ setScreen }) => {
           <button
             onClick={() => send(input)}
             disabled={!input.trim() || loading}
-            className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-black font-bold hover:bg-white/90 transition-all active:scale-95 disabled:opacity-20 disabled:bg-white/10 disabled:text-white/30 flex-shrink-0 shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+            className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-black font-bold hover:bg-white/90 transition-all active:scale-95 disabled:opacity-20 disabled:bg-white/10 disabled:text-white/30 flex-shrink-0">
             <ArrowUpIcon className="w-5 h-5" />
           </button>
         </div>

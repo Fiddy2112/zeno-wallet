@@ -9,8 +9,11 @@ import {
 import React, { useEffect, useState } from "react"
 import { formatEther, formatGwei } from "viem"
 
-import { getClient, SUPPORTED_CHAINS } from "~core/networks"
+import { getAdapter, getClient, SUPPORTED_CHAINS } from "~core/networks"
+import { deriveWalletFromMnemonic } from "~core/wallet-engine"
 import { notify } from "~features/notifications"
+import { getCachedPrice } from "~features/price-cache"
+import { vaultSecurity } from "~features/security"
 import type { Screen } from "~types"
 
 interface Props {
@@ -21,23 +24,15 @@ interface Props {
 export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
   const [to, setTo] = useState("")
   const [amount, setAmount] = useState("")
-
-  // Selected chain
   const [selectedChainId, setSelectedChainId] = useState(SUPPORTED_CHAINS[0].id)
   const currentChain =
     SUPPORTED_CHAINS.find((c) => c.id === selectedChainId) ||
     SUPPORTED_CHAINS[0]
-
-  // Dropdown options
   const [showDropdown, setShowDropdown] = useState(false)
-
-  // AI state
   const [aiStatus, setAiStatus] = useState<
     "idle" | "scanning" | "safe" | "warn"
   >("idle")
   const [step, setStep] = useState<"input" | "review" | "sending">("input")
-
-  // Real-time state
   const [myAddress, setMyAddress] = useState("")
   const [balance, setBalance] = useState(0)
   const [tokenPrice, setTokenPrice] = useState(0)
@@ -45,14 +40,13 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
   const [gasTier, setGasTier] = useState<"Slow" | "Zeno Fast" | "Instant">(
     "Zeno Fast"
   )
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [txPassword, setTxPassword] = useState("")
+  const [txError, setTxError] = useState("")
 
-  // get address and check pending from AI
   useEffect(() => {
     chrome.storage.local.get(["pending_tx", "zeno_address"], (res) => {
-      if (res.zeno_address) {
-        setMyAddress(res.zeno_address)
-      }
-
+      if (res.zeno_address) setMyAddress(res.zeno_address)
       if (res.pending_tx) {
         const { to: aiTo, amount: aiAmount, token: aiToken } = res.pending_tx
         if (aiTo) {
@@ -61,13 +55,13 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
         }
         if (aiAmount) setAmount(aiAmount)
         if (aiToken) {
-          const matchedChain = SUPPORTED_CHAINS.find(
+          const match = SUPPORTED_CHAINS.find(
             (c) =>
               c.nativeSymbol.toLowerCase() === aiToken.toLowerCase() ||
               c.id.toLowerCase() === aiToken.toLowerCase() ||
               c.name.toLowerCase() === aiToken.toLowerCase()
           )
-          if (matchedChain) setSelectedChainId(matchedChain.id)
+          if (match) setSelectedChainId(match.id)
         }
         chrome.storage.local.remove("pending_tx")
       }
@@ -81,35 +75,28 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
       try {
         const client = getClient(currentChain.id)
 
-        const bal = await client.getBalance({
-          address: myAddress as `0x${string}`
-        })
+        // Balance + gas: safe to poll every 10s
+        const [bal, gas] = await Promise.all([
+          client.getBalance({ address: myAddress as `0x${string}` }),
+          client.getGasPrice()
+        ])
         setBalance(Number(formatEther(bal)))
-        // get gas current
-        const gas = await client.getGasPrice()
         setBaseGasPrice(gas)
 
-        // get price USD
-        if (currentChain.coingeckoId) {
-          const res = await fetch(
-            `https://api.coingecko.com/api/v3/simple/price?ids=${currentChain.coingeckoId}&vs_currencies=usd`
-          )
-          const data = await res.json()
-          setTokenPrice(data[currentChain.coingeckoId]?.usd || 0)
-        }
+        // Price: shared cache — max 1 CoinGecko req per 60s across all screens
+        const price = await getCachedPrice(currentChain.coingeckoId)
+        setTokenPrice(price)
       } catch (error) {
-        console.error("Data network access error:", error)
+        console.error("fetchNetworkData error:", error)
       }
     }
-    fetchNetworkData()
 
-    const interval = setInterval(fetchNetworkData, 10000)
+    fetchNetworkData()
+    const interval = setInterval(fetchNetworkData, 10_000)
     return () => clearInterval(interval)
   }, [myAddress, currentChain.id, currentChain.coingeckoId])
 
-  // calculate gas costs
-  const gasLimit = 21000n // Standard ETH transfer limit
-
+  const gasLimit = 21000n
   const getGasMultiplier = () => {
     if (gasTier === "Slow") return 100n
     if (gasTier === "Zeno Fast") return 120n
@@ -123,7 +110,6 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
       : (baseGasPrice * gasLimit * getGasMultiplier()) / 100n
   const feeInEth = Number(formatEther(feeInWei))
   const feeInUsd = feeInEth * tokenPrice
-
   const currentGweiInWei =
     baseGasPrice === 0n ? 0n : (baseGasPrice * getGasMultiplier()) / 100n
   const currentGwei = Number(formatGwei(currentGweiInWei))
@@ -151,21 +137,124 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
     }
   }
 
-  const handleExecute = async () => {
+  const handleExecute = () => {
+    setTxError("")
+    setTxPassword("")
+    setShowPasswordModal(true)
+  }
+
+  const handleConfirmWithPassword = async () => {
+    if (!txPassword) return
+    setTxError("")
+    setShowPasswordModal(false)
     setStep("sending")
-    //  This calls -> client.sendTransaction()
-    setTimeout(() => {
+
+    try {
+      const res = await chrome.storage.local.get(["zeno_vault", "zeno_salt"])
+      if (!res.zeno_vault || !res.zeno_salt) {
+        throw new Error("Vault not found. Please re-import your wallet.")
+      }
+
+      const mnemonic = vaultSecurity.decryptMnemonic(
+        res.zeno_vault,
+        txPassword,
+        res.zeno_salt
+      )
+      if (!mnemonic) throw new Error("Wrong password")
+
+      const wallet = deriveWalletFromMnemonic(mnemonic)
+      const { adapter } = getAdapter(selectedChainId)
+
+      const hash = await adapter.sendTx({
+        privateKey: wallet.privateKey,
+        to,
+        value: amount,
+        chainId: selectedChainId,
+        gasPrice:
+          baseGasPrice === 0n
+            ? undefined
+            : (baseGasPrice * getGasMultiplier()) / 100n
+      })
+
       notify.success(
-        `Successfully sent ${amount} ${currentChain.nativeSymbol} to ${to.slice(0, 6)}...!`,
+        `Sent! Hash: ${hash.slice(0, 10)}...${hash.slice(-6)}`,
         "dark",
-        4000
+        5000
       )
       setScreen("dashboard")
-    }, 2500)
+    } catch (err: any) {
+      const msg = err?.shortMessage || err?.message || "Transaction failed"
+      if (msg.includes("Wrong password") || msg === "") {
+        setTxError("Incorrect password. Please try again.")
+        setTxPassword("")
+        setShowPasswordModal(true)
+        setStep("review")
+      } else if (msg.includes("insufficient funds")) {
+        notify.error("Insufficient funds for this transaction.", "dark", 4000)
+        setStep("review")
+      } else {
+        notify.error(msg, "dark", 4000)
+        setStep("review")
+      }
+    }
   }
 
   return (
     <div className="flex-1 flex flex-col p-4 animate-fade-up h-full">
+      {/* Password modal — bottom sheet */}
+      {showPasswordModal && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-end z-50">
+          <div className="w-full bg-[#111] border-t border-white/10 p-6 rounded-t-3xl animate-fade-up">
+            <div className="w-8 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+            <h3 className="text-white font-black text-sm uppercase tracking-widest mb-1">
+              Authorize Transfer
+            </h3>
+            <p className="text-white/40 text-xs mb-5 leading-relaxed">
+              Enter your wallet password to sign and broadcast this transaction.
+            </p>
+            <input
+              type="password"
+              value={txPassword}
+              onChange={(e) => {
+                setTxPassword(e.target.value)
+                setTxError("")
+              }}
+              onKeyDown={(e) =>
+                e.key === "Enter" && handleConfirmWithPassword()
+              }
+              placeholder="Wallet password"
+              autoFocus
+              className="w-full bg-white/[0.05] border border-white/10 focus:border-white/30 text-white placeholder-white/20 px-4 py-3.5 rounded-xl outline-none text-sm mb-2 transition-all"
+            />
+            {txError && (
+              <p className="text-red-400 text-xs mb-3 flex items-center gap-1.5">
+                <AlertTriangle className="w-3 h-3" />
+                {txError}
+              </p>
+            )}
+            <div className="flex gap-3 mt-3">
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false)
+                  setTxPassword("")
+                  setTxError("")
+                  setStep("review")
+                }}
+                className="flex-1 py-3 border border-white/10 text-white/50 rounded-xl text-xs font-bold hover:border-white/25 hover:text-white/70 transition-all">
+                CANCEL
+              </button>
+              <button
+                onClick={handleConfirmWithPassword}
+                disabled={!txPassword}
+                className="flex-1 py-3 bg-emerald-400 text-black rounded-xl text-xs font-black disabled:opacity-30 hover:bg-emerald-300 active:scale-[0.98] transition-all">
+                SIGN & SEND
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex items-center gap-3 mb-5">
         <button
           onClick={() =>
@@ -192,8 +281,6 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
               placeholder="0x... or ENS name"
               className="w-full bg-black/40 border border-white/10 focus:border-white/30 text-white placeholder-white/20 px-4 py-3.5 rounded-xl outline-none text-xs transition-all font-mono"
             />
-
-            {/* AI Guardian status */}
             {proMode && (
               <div className="mt-3 h-5 flex items-center">
                 {aiStatus === "scanning" && (
@@ -230,7 +317,6 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
               Asset & Amount
             </label>
             <div className="flex gap-2">
-              {/* Custom token dropdown */}
               <div className="relative w-[35%]">
                 <button
                   onClick={() => setShowDropdown(!showDropdown)}
@@ -247,17 +333,12 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                     className={`w-3 h-3 text-white/50 transition-transform duration-300 ${showDropdown ? "rotate-180" : ""}`}
                   />
                 </button>
-
-                {/* Dropdown Menu */}
                 {showDropdown && (
                   <>
-                    {/* Overlay */}
                     <div
                       className="fixed inset-0 z-10"
                       onClick={() => setShowDropdown(false)}
                     />
-
-                    {/* Box menu */}
                     <div className="absolute top-full left-0 mt-2 w-full min-w-[100px] bg-[#1a1a1a] border border-white/10 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.5)] z-20 overflow-hidden animate-fade-in py-1">
                       {SUPPORTED_CHAINS.map((chain) => (
                         <button
@@ -268,18 +349,14 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                             setBalance(0)
                             setBaseGasPrice(0n)
                           }}
-                          className={`w-full flex items-center gap-3 px-4 py-3 text-xs font-bold transition-colors ${
-                            selectedChainId === chain.id
-                              ? "bg-emerald-400/10 text-emerald-400"
-                              : "text-white/60 hover:bg-white/10 hover:text-white"
-                          }`}>
+                          className={`w-full flex items-center gap-3 px-4 py-3 text-xs font-bold transition-colors ${selectedChainId === chain.id ? "bg-emerald-400/10 text-emerald-400" : "text-white/60 hover:bg-white/10 hover:text-white"}`}>
                           <img
                             src={chain.logo}
                             alt={chain.name}
                             className="w-5 h-5 rounded-full bg-black/50"
                           />
                           <div className="flex flex-col items-start">
-                            <span>{chain.nativeSymbol}</span>{" "}
+                            <span>{chain.nativeSymbol}</span>
                             <span className="text-[9px] font-normal opacity-50">
                               {chain.name}
                             </span>
@@ -290,7 +367,6 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                   </>
                 )}
               </div>
-
               <input
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
@@ -312,7 +388,7 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
             </div>
           </div>
 
-          {/* Gas estimate */}
+          {/* Gas */}
           {proMode ? (
             <div className="bg-[#121212] border border-white/5 rounded-2xl p-4 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none">
@@ -342,7 +418,12 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                   {currentChain.nativeSymbol}
                 </span>
                 <span className="text-white/40 text-xs">
-                  ≈ ${feeInUsd < 0.01 ? "<0.01" : feeInUsd.toFixed(2)}
+                  ≈ $
+                  {feeInUsd > 0
+                    ? feeInUsd < 0.01
+                      ? "<0.01"
+                      : feeInUsd.toFixed(2)
+                    : "..."}
                 </span>
               </div>
               <div className="flex gap-2 relative z-10">
@@ -350,11 +431,7 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                   <button
                     key={tier}
                     onClick={() => setGasTier(tier)}
-                    className={`flex-1 text-[10px] py-1.5 rounded-lg transition-all font-bold tracking-widest uppercase ${
-                      gasTier === tier
-                        ? "bg-white text-black shadow-[0_0_10px_rgba(255,255,255,0.2)]"
-                        : "bg-black/50 border border-white/5 text-white/30 hover:border-white/20 hover:text-white/60"
-                    }`}>
+                    className={`flex-1 text-[10px] py-1.5 rounded-lg transition-all font-bold tracking-widest uppercase ${gasTier === tier ? "bg-white text-black shadow-[0_0_10px_rgba(255,255,255,0.2)]" : "bg-black/50 border border-white/5 text-white/30 hover:border-white/20 hover:text-white/60"}`}>
                     {tier}
                   </button>
                 ))}
@@ -366,20 +443,26 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
               <span>
                 ~{feeInEth > 0 ? feeInEth.toFixed(7) : "..."}{" "}
                 {currentChain.nativeSymbol}
+                {tokenPrice > 0 && feeInUsd > 0 && (
+                  <span className="text-white/25 ml-1">
+                    (≈ ${feeInUsd < 0.01 ? "<0.01" : feeInUsd.toFixed(2)})
+                  </span>
+                )}
               </span>
             </div>
           )}
         </div>
       ) : (
-        /* Review transaction */
+        /* Review */
         <div className="flex-1 flex flex-col items-center justify-center animate-fade-in space-y-6">
           <div className="w-20 h-20 bg-white/5 border border-white/10 rounded-full flex items-center justify-center mb-2">
-            <Fingerprint className="w-10 h-10 text-emerald-400 animate-pulse" />
+            <Fingerprint
+              className={`w-10 h-10 ${step === "sending" ? "text-white/40" : "text-emerald-400 animate-pulse"}`}
+            />
           </div>
-
           <div className="text-center">
             <p className="text-white/40 text-[10px] uppercase tracking-widest mb-2">
-              Sending Exact
+              {step === "sending" ? "Broadcasting..." : "Sending Exact"}
             </p>
             <h1 className="text-4xl font-black text-white">
               {amount}{" "}
@@ -387,7 +470,6 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                 {currentChain.nativeSymbol}
               </span>
             </h1>
-
             <p className="text-white/30 text-xs mt-1 font-mono">
               ≈ $
               {tokenPrice > 0
@@ -395,7 +477,6 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                 : "..."}
             </p>
           </div>
-
           <div className="w-full bg-white/[0.02] border border-white/5 p-4 rounded-2xl space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-white/40 text-[10px] uppercase tracking-widest">
@@ -405,13 +486,12 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                 {to.slice(0, 8)}...{to.slice(-6)}
               </span>
             </div>
-
             <div className="flex justify-between items-center">
               <span className="text-white/40 text-[10px] uppercase tracking-widest">
                 Network Fee
               </span>
               <span className="text-white text-xs font-mono">
-                ~$
+                ≈ $
                 {tokenPrice > 0
                   ? feeInUsd > 0 && feeInUsd < 0.01
                     ? "<0.01"
@@ -420,7 +500,6 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
                 ({proMode ? gasTier : "Standard"})
               </span>
             </div>
-
             <div className="flex justify-between items-center">
               <span className="text-emerald-400 text-[10px] uppercase tracking-widest font-bold">
                 Security
@@ -433,7 +512,7 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
         </div>
       )}
 
-      {/* Execute button */}
+      {/* Bottom button */}
       <div className="mt-4 pt-4 border-t border-white/5">
         <button
           onClick={() =>
@@ -442,11 +521,7 @@ export const SendScreen: React.FC<Props> = ({ setScreen, proMode }) => {
           disabled={
             !to || !amount || aiStatus === "scanning" || step === "sending"
           }
-          className={`w-full py-4 font-black rounded-2xl text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${
-            step === "review"
-              ? "bg-emerald-400 text-black hover:bg-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
-              : "bg-white text-black hover:bg-white/90"
-          } disabled:opacity-20 disabled:cursor-not-allowed`}>
+          className={`w-full py-4 font-black rounded-2xl text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${step === "review" ? "bg-emerald-400 text-black hover:bg-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.3)]" : "bg-white text-black hover:bg-white/90"} disabled:opacity-20 disabled:cursor-not-allowed`}>
           {step === "sending"
             ? "BROADCASTING TO NETWORK..."
             : step === "review"

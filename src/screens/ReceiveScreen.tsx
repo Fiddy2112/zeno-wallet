@@ -9,29 +9,22 @@ interface Props {
   setScreen: (s: Screen) => void
 }
 
+const EVM_CHAINS = SUPPORTED_CHAINS.filter(
+  (c) => c.vmType === "EVM" && c.id !== "solana" && c.id !== "bitcoin"
+)
+
 export const ReceiveScreen: React.FC<Props> = ({ setScreen }) => {
   const [address, setAddress] = useState<string>("Loading...")
   const [selectedChainId, setSelectedChainId] = useState(SUPPORTED_CHAINS[0].id)
   const [copied, setCopied] = useState(false)
-  // multi-wallet
-  const [wallets, setWallets] = useState<Record<string, string>>({
-    EVM: "Loading...",
-    SVM: "Generating...",
-    BVM: "Generating..."
-  })
 
   useEffect(() => {
-    chrome.storage.local.get(["zeno_address", "zeno_multi_wallets"], (res) => {
-      if (res.zeno_address) {
-        // setAddress(res.zeno_address)
-        setWallets({
-          EVM: res.zeno_address,
-          SVM: "5fbT9... (Solana Integration Soon)",
-          BVM: "bc1q... (Bitcoin Integration Soon)",
-          TVM: "TLu9T... (Tron Integration Soon)"
-        })
-      } else if (res.zeno_multi_wallets) {
-        setWallets(res.zeno_multi_wallets)
+    chrome.storage.local.get(["zeno_address", "zeno_chain_filter"], (res) => {
+      if (res.zeno_address) setAddress(res.zeno_address)
+      // Sync with dashboard chain selector — if user had selected a specific chain
+      if (res.zeno_chain_filter && res.zeno_chain_filter !== "all") {
+        const match = EVM_CHAINS.find((c) => c.id === res.zeno_chain_filter)
+        if (match) setSelectedChainId(match.id)
       }
     })
   }, [])
@@ -46,8 +39,6 @@ export const ReceiveScreen: React.FC<Props> = ({ setScreen }) => {
   const currentChain =
     SUPPORTED_CHAINS.find((c) => c.id === selectedChainId) ||
     SUPPORTED_CHAINS[0]
-  // Fallback về EVM nếu quên khai báo vmType
-  const activeAddress = wallets[currentChain.vmType || "EVM"] || wallets.EVM
 
   return (
     <div className="flex-1 flex flex-col p-4 animate-fade-up">
@@ -62,14 +53,14 @@ export const ReceiveScreen: React.FC<Props> = ({ setScreen }) => {
             Receive
           </h2>
           <span className="text-[9px] font-bold text-emerald-400 mt-1 tracking-widest uppercase">
-            Multi-VM Enabled
+            Multi-chain
           </span>
         </div>
       </div>
 
-      {/* Network tabs */}
+      {/* Network tabs — only EVM chains */}
       <div className="flex gap-1.5 mb-5 overflow-x-auto custom-scrollbar pb-1">
-        {SUPPORTED_CHAINS.map((chain) => (
+        {EVM_CHAINS.map((chain) => (
           <button
             key={chain.id}
             onClick={() => {
@@ -93,65 +84,19 @@ export const ReceiveScreen: React.FC<Props> = ({ setScreen }) => {
 
       {/* QR Code */}
       <div className="flex-1 flex flex-col items-center justify-center mb-5">
-        <div className="glass rounded-2xl p-4 glow-sm">
-          <div className="w-40 h-40 relative">
-            <div className="absolute inset-0 flex items-center justify-center flex-col gap-0.5 p-0">
-              {!activeAddress.includes("Soon") &&
-              !activeAddress.includes("Loading") ? (
-                <QRCode
-                  value={activeAddress}
-                  size={180}
-                  bgColor="#ffffff"
-                  fgColor="#000000"
-                  level="Q"
-                />
-              ) : (
-                <div className="absolute inset-0 flex flex-col gap-0.5 p-0">
-                  {Array.from({ length: 14 }).map((_, row) => (
-                    <div key={row} className="flex gap-0.5 flex-1">
-                      {Array.from({ length: 14 }).map((_, col) => {
-                        // Corners (finder patterns)
-                        const inTL = row < 5 && col < 5
-                        const inTR = row < 5 && col > 8
-                        const inBL = row > 8 && col < 5
-                        const isBorderTL =
-                          inTL &&
-                          (row === 0 || row === 4 || col === 0 || col === 4)
-                        const isBorderTR =
-                          inTR &&
-                          (row === 0 || row === 4 || col === 9 || col === 13)
-                        const isBorderBL =
-                          inBL &&
-                          (row === 9 || row === 13 || col === 0 || col === 4)
-                        const isCenterTL =
-                          inTL && row >= 1 && row <= 3 && col >= 1 && col <= 3
-                        const isCenterTR =
-                          inTR && row >= 1 && row <= 3 && col >= 10 && col <= 12
-                        const isCenterBL =
-                          inBL && row >= 10 && row <= 12 && col >= 1 && col <= 3
-                        const dark =
-                          isBorderTL ||
-                          isBorderTR ||
-                          isBorderBL ||
-                          isCenterTL ||
-                          isCenterTR ||
-                          isCenterBL ||
-                          (!inTL &&
-                            !inTR &&
-                            !inBL &&
-                            (row + col * 3 + row * col) % 3 === 0)
-                        return (
-                          <div
-                            key={col}
-                            className={`flex-1 rounded-[1px] ${dark ? "bg-white" : "bg-transparent"}`}
-                          />
-                        )
-                      })}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        <div className="glass rounded-2xl p-4">
+          <div className="w-40 h-40 relative flex items-center justify-center">
+            {address !== "Loading..." ? (
+              <QRCode
+                value={address}
+                size={160}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="Q"
+              />
+            ) : (
+              <div className="w-40 h-40 bg-white/5 rounded-xl animate-pulse" />
+            )}
             {/* Center Z logo */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-8 h-8 bg-black border border-white/20 rounded-lg flex items-center justify-center">
@@ -160,40 +105,41 @@ export const ReceiveScreen: React.FC<Props> = ({ setScreen }) => {
             </div>
           </div>
         </div>
+
+        {/* Chain badge below QR */}
+        <div className="flex items-center gap-2 mt-3">
+          <img
+            src={currentChain.logo}
+            alt={currentChain.name}
+            className="w-4 h-4 rounded-full"
+          />
+          <span className="text-white/50 text-[10px] font-bold uppercase tracking-widest">
+            {currentChain.name}
+          </span>
+        </div>
       </div>
 
-      {/* Network badge */}
-      <div className="text-center mb-6 px-4">
-        <p className="text-white/40 text-[10px] uppercase tracking-widest leading-relaxed">
-          Send only{" "}
-          <span
-            className={`${
-              currentChain.vmType === "SVM"
-                ? "text-purple-400"
-                : currentChain.vmType === "BVM"
-                  ? "text-orange-400"
-                  : "text-emerald-400"
-            } font-bold`}>
-            {currentChain.name} ({currentChain.vmType})
-          </span>{" "}
-          assets to this address.
-        </p>
-      </div>
+      {/* Warning */}
+      <p className="text-white/30 text-[10px] uppercase tracking-widest text-center mb-4 px-4 leading-relaxed">
+        Send only{" "}
+        <span className="text-emerald-400 font-bold">{currentChain.name}</span>{" "}
+        assets to this address
+      </p>
 
-      {/* Address */}
+      {/* Address box */}
       <div
         className="w-full bg-[#121212] border border-white/5 rounded-2xl p-4 mb-4 flex flex-col items-center gap-2 cursor-pointer hover:bg-white/[0.04] transition-colors"
         onClick={copy}>
-        <span className="text-white/30 text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
-          {currentChain.vmType} Public Address
+        <span className="text-white/30 text-[9px] font-bold uppercase tracking-widest">
+          Public Address
         </span>
         <p className="text-white text-sm font-mono break-all text-center leading-relaxed">
-          {activeAddress}
+          {address}
         </p>
-        <div className="mt-2 text-white/50 text-[10px] flex items-center gap-1 font-bold">
+        <div className="mt-1 text-white/50 text-[10px] flex items-center gap-1 font-bold">
           {copied ? (
             <>
-              <CopyCheck className="w-3 h-3 text-emerald-400" />{" "}
+              <CopyCheck className="w-3 h-3 text-emerald-400" />
               <span className="text-emerald-400">Copied</span>
             </>
           ) : (
@@ -204,14 +150,11 @@ export const ReceiveScreen: React.FC<Props> = ({ setScreen }) => {
         </div>
       </div>
 
-      {/* Button */}
       <div className="pt-2 border-t border-white/5 mt-auto">
         <button
           onClick={copy}
-          disabled={
-            activeAddress.includes("Soon") || activeAddress.includes("Loading")
-          }
-          className={`w-full py-4 font-black rounded-2xl text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
+          disabled={address === "Loading..."}
+          className={`w-full py-4 font-black rounded-2xl text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-30 ${
             copied
               ? "bg-emerald-400 text-black shadow-[0_0_20px_rgba(52,211,153,0.3)]"
               : "bg-white text-black hover:bg-white/90"

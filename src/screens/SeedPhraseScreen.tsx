@@ -24,8 +24,8 @@ export const SeedPhraseScreen: React.FC<Props> = ({
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    const mnemonic = generateMnemonic()
-    setMnemonic(mnemonic)
+    const words = generateMnemonic()
+    setMnemonic(words)
   }, [])
 
   const handleCopy = () => {
@@ -33,7 +33,7 @@ export const SeedPhraseScreen: React.FC<Props> = ({
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
     notify.warning(
-      "Don't send it to anyone and don't show it to anyone, not even Zeno!",
+      "Don't share this with anyone — not even Zeno!",
       "dark",
       3000
     )
@@ -47,10 +47,8 @@ export const SeedPhraseScreen: React.FC<Props> = ({
     }
 
     try {
-      // Create address wallet from 12 words
       const wallet = deriveWalletFromMnemonic(mnemonic.join(" "))
       const publicAddress = wallet.address
-      // vaultSecurity
       const salt = vaultSecurity.generateSalt()
       const encryptedVault = vaultSecurity.encryptVault(
         mnemonic.join(" "),
@@ -58,25 +56,13 @@ export const SeedPhraseScreen: React.FC<Props> = ({
         salt
       )
 
-      // Try to save to chrome storage if available
-      if (
-        typeof chrome !== "undefined" &&
-        chrome.storage &&
-        chrome.storage.local
-      ) {
-        await chrome.storage.local.set({
-          zeno_vault: encryptedVault,
-          zeno_salt: salt,
-          zeno_onboarded: true,
-          zeno_address: publicAddress
-        })
-      }
-
-      // Fallback/Sync with localStorage for the root IndexPopup check
-      localStorage.setItem("zeno_onboarded", "true")
-      localStorage.setItem("zeno_address", publicAddress)
-      localStorage.setItem("zeno_vault", encryptedVault)
-      localStorage.setItem("zeno_salt", salt)
+      await chrome.storage.local.set({
+        zeno_vault: encryptedVault,
+        zeno_salt: salt,
+        zeno_onboarded: true,
+        zeno_address: publicAddress,
+        zeno_timestamp: new Date().toISOString()
+      })
 
       setPassword("")
       setScreen("dashboard")
@@ -100,7 +86,6 @@ export const SeedPhraseScreen: React.FC<Props> = ({
         Write these 12 words down in order. Never share them with anyone.
       </p>
 
-      {/* Warning */}
       <div className="bg-yellow-500/[0.08] border border-yellow-500/20 rounded-xl p-3 mb-4 flex gap-2">
         <span className="text-yellow-400 text-sm">⚠</span>
         <p className="text-yellow-400/80 text-xs leading-relaxed">
@@ -129,9 +114,7 @@ export const SeedPhraseScreen: React.FC<Props> = ({
           <button
             onClick={() => setRevealed(true)}
             className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-xl text-white font-semibold text-sm gap-2 hover:bg-black/40 transition-all">
-            <span>
-              <Eye />
-            </span>
+            <Eye className="w-4 h-4" />
             Click to reveal
           </button>
         )}
@@ -145,7 +128,6 @@ export const SeedPhraseScreen: React.FC<Props> = ({
         </button>
       )}
 
-      {/* Confirm */}
       <label className="flex items-start gap-3 cursor-pointer mb-6 mt-auto">
         <div
           className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border transition-all mt-0.5 ${backed ? "bg-white border-white" : "border-white/20 hover:border-white/40"}`}

@@ -22,7 +22,7 @@ export function useDashboardTour() {
         {
           element: "#tour-logo",
           popover: {
-            title: "⚡ Welcome to Zeno",
+            title: "Welcome to Zeno",
             description:
               "Zeno is your AI-powered Web3 wallet. Let's take a quick tour so you know exactly where everything is.",
             side: "bottom",
@@ -32,7 +32,7 @@ export function useDashboardTour() {
         {
           element: "#tour-address",
           popover: {
-            title: "🔑 Your Wallet Address",
+            title: "Your Wallet Address",
             description:
               "This is your public address. Click it to copy — share it with anyone who wants to send you crypto.",
             side: "bottom",
@@ -42,7 +42,7 @@ export function useDashboardTour() {
         {
           element: "#tour-network",
           popover: {
-            title: "⬡ Network Selector",
+            title: "Network Selector",
             description:
               "You're on Ethereum Mainnet. Zeno supports multi-chain — switch networks at any time.",
             side: "bottom",
@@ -52,7 +52,7 @@ export function useDashboardTour() {
         {
           element: "#tour-mode-toggle",
           popover: {
-            title: "◈ Lite / Pro Mode",
+            title: "Lite / Pro Mode",
             description:
               "Switch between <strong>Lite Mode</strong> (simple, intent-based) and <strong>Pro Mode</strong> (advanced — MEV protection, AI risk scores, DeFi alpha).",
             side: "bottom",
@@ -62,7 +62,7 @@ export function useDashboardTour() {
         {
           element: "#tour-balance",
           popover: {
-            title: "💰 Total Balance",
+            title: "Total Balance",
             description:
               "Your real-time portfolio value across all assets, with today's performance at a glance.",
             side: "bottom",
@@ -72,7 +72,7 @@ export function useDashboardTour() {
         {
           element: "#tour-actions",
           popover: {
-            title: "🚀 Quick Actions",
+            title: "Quick Actions",
             description:
               "Send, Receive, Swap, or Buy crypto — all in one tap. Zeno's AI Guardian checks every transaction before you sign.",
             side: "top",
@@ -82,7 +82,7 @@ export function useDashboardTour() {
         {
           element: "#tour-assets",
           popover: {
-            title: "📊 Your Assets",
+            title: "Your Assets",
             description:
               "All your tokens with live balances and price changes. More chains and tokens are added automatically.",
             side: "top",
@@ -92,7 +92,7 @@ export function useDashboardTour() {
         {
           element: "#tour-nav-ai",
           popover: {
-            title: "🤖 AI Guardian",
+            title: "AI Guardian",
             description:
               "Chat with Zeno AI 24/7 — it monitors your wallet for threats, analyzes transactions, and surfaces DeFi opportunities.",
             side: "top",
@@ -102,7 +102,7 @@ export function useDashboardTour() {
         {
           element: "#tour-nav-settings",
           popover: {
-            title: "⚙️ Settings",
+            title: "Settings",
             description:
               "Manage your account, security preferences, networks, and wallet mode from here.",
             side: "top",
@@ -111,7 +111,7 @@ export function useDashboardTour() {
         }
       ],
       onDestroyStarted: () => {
-        localStorage.setItem(TOUR_KEY, "true")
+        chrome.storage.local.set({ [TOUR_KEY]: true })
         driverObj.destroy()
       }
     })
@@ -119,7 +119,10 @@ export function useDashboardTour() {
     driverObj.drive()
   }
 
-  const shouldAutoStart = () => !localStorage.getItem(TOUR_KEY)
+  const shouldAutoStart = async () => {
+    const res = await chrome.storage.local.get(TOUR_KEY)
+    return !res[TOUR_KEY]
+  }
 
   return { startTour, shouldAutoStart }
 }

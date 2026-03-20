@@ -22,7 +22,8 @@ export const fetchAllBalances = async (
   } as any)
 
   return tokenList.map((token, i) => {
-    const rawBalance = (results[i].result as bigint) || 0n
+    const rawBalance =
+      results[i].status === "success" ? (results[i].result as bigint) || 0n : 0n
     return {
       ...token,
       balance: formatUnits(rawBalance, token.decimals),

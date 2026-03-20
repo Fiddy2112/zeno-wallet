@@ -1,8 +1,6 @@
 import cssText from "data-text:~style.css"
 import type { PlasmoCSConfig } from "plasmo"
 
-import { CountButton } from "~features/count-button"
-
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"]
 }
@@ -18,20 +16,3 @@ export const getStyle = (): HTMLStyleElement => {
   styleElement.textContent = updatedCssText
   return styleElement
 }
-
-const PlasmoOverlay = () => {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: "128px",
-        right: "32px",
-        zIndex: 50,
-        display: "flex"
-      }}>
-      <CountButton />
-    </div>
-  )
-}
-
-export default PlasmoOverlay

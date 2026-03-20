@@ -39,7 +39,10 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "https://api.coingecko.com/*",
+      "https://*.alchemy.com/*",
+      "https://*.llamarpc.com/*"
     ],
     "permissions": [
       "storage"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { isAddress } from "viem"
+import { formatUnits, isAddress } from "viem"
 
 import { getAdapter, SUPPORTED_CHAINS } from "~core/networks"
 
@@ -42,6 +42,8 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
 
     let cancelled = false
 
+    const controller = new AbortController()
+
     async function fetchPortfolio() {
       setIsLoading(true)
 
@@ -51,7 +53,8 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
           new Set(SUPPORTED_CHAINS.map((c) => c.coingeckoId))
         ).join(",")
         const prices: Record<string, { usd: number }> = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds}&vs_currencies=usd`
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds}&vs_currencies=usd`,
+          { signal: controller.signal }
         ).then((r) => r.json())
 
         // Loop each chain
@@ -63,19 +66,20 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
               let totalUsd = 0
 
               // Native token
-              const nativeBalance = await adapter.getBalance(
+              const nativeBalanceStr = await adapter.getBalance(
                 walletAddress,
                 config
               )
-              if (Number(nativeBalance) > 0.000001) {
+              const nativeBalanceNum = parseFloat(nativeBalanceStr)
+              if (nativeBalanceNum > 0.000001) {
                 const nativePrice = prices[chain.coingeckoId]?.usd || 0
-                const usdValue = Number(nativeBalance) * nativePrice
+                const usdValue = nativeBalanceNum * nativePrice
                 totalUsd += usdValue
 
                 tokens.push({
                   symbol: chain.nativeSymbol,
                   address: "native",
-                  balance: Number(nativeBalance),
+                  balance: nativeBalanceNum,
                   price: nativePrice,
                   usdValue,
                   logo: chain.logo
@@ -119,7 +123,9 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
 
                     const meta = metaRes?.result
                     if (!meta?.decimals) return null
-                    const balance = Number(t.tokenBalance) / 10 ** meta.decimals
+                    const balance = parseFloat(
+                      formatUnits(BigInt(t.tokenBalance), meta.decimals)
+                    )
                     if (balance <= 0) return null
 
                     return {
@@ -176,8 +182,7 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
             }
           })
         )
-
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setNetworkGroups(
             results
               .filter(Boolean)
@@ -185,16 +190,15 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
           )
         }
       } catch (err) {
+        if ((err as Error).name === "AbortError") return
         console.error("Portfolio error:", err)
       } finally {
-        if (!cancelled) setIsLoading(false)
+        if (!controller.signal.aborted) setIsLoading(false)
       }
     }
 
     fetchPortfolio()
-    return () => {
-      cancelled = true
-    }
+    return () => controller.abort()
   }, [walletAddress])
 
   return { networkGroups, isLoading }

@@ -9,7 +9,7 @@ interface Props {
   setScreen: (s: Screen) => void
   setPassword: (p: string) => void
   importedPhrase?: string
-  nextScreen?: Screen // "seed-phrase" | "dashboard"
+  nextScreen?: Screen
 }
 
 export const SetupPasswordScreen: React.FC<Props> = ({
@@ -21,6 +21,7 @@ export const SetupPasswordScreen: React.FC<Props> = ({
   const [pass, setPass] = useState("")
   const [confirm, setConfirm] = useState("")
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
   const strength =
     pass.length === 0 ? 0 : pass.length < 8 ? 1 : pass.length < 12 ? 2 : 3
@@ -43,8 +44,8 @@ export const SetupPasswordScreen: React.FC<Props> = ({
       return
     }
 
+    setLoading(true)
     try {
-      // If we're importing, we create the vault NOW
       if (importedPhrase) {
         const wallet = deriveWalletFromMnemonic(importedPhrase)
         const publicAddress = wallet.address
@@ -55,38 +56,29 @@ export const SetupPasswordScreen: React.FC<Props> = ({
           salt
         )
 
-        if (
-          typeof chrome !== "undefined" &&
-          chrome.storage &&
-          chrome.storage.local
-        ) {
-          await chrome.storage.local.set({
-            zeno_vault: encryptedVault,
-            zeno_salt: salt,
-            zeno_onboarded: true,
-            zeno_address: publicAddress
-          })
-        }
+        await chrome.storage.local.set({
+          zeno_vault: encryptedVault,
+          zeno_salt: salt,
+          zeno_onboarded: true,
+          zeno_address: publicAddress,
+          zeno_timestamp: new Date().toISOString()
+        })
 
-        localStorage.setItem("zeno_onboarded", "true")
-        localStorage.setItem("zeno_address", publicAddress)
-        localStorage.setItem("zeno_vault", encryptedVault)
-        localStorage.setItem("zeno_salt", salt)
         notify.success("Wallet imported successfully!")
       }
 
-      // We store the password temporarily for the session if needed
       setPassword(pass)
       setScreen(nextScreen)
     } catch (err) {
       console.error("Import error:", err)
       setError("Failed to import wallet. Please check your phrase.")
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
     <div className="flex-1 flex flex-col p-6 animate-fade-up">
-      {/* Back */}
       <button
         onClick={() => setScreen("welcome")}
         className="text-white/40 text-sm mb-6 flex items-center gap-1 hover:text-white/80 transition-colors w-fit">
@@ -98,22 +90,19 @@ export const SetupPasswordScreen: React.FC<Props> = ({
         This unlocks Zeno on this device only. We cannot recover it for you.
       </p>
 
-      {/* Password */}
       <div className="space-y-3 mb-4">
-        <div className="relative">
-          <input
-            type="password"
-            placeholder="New password"
-            value={pass}
-            onChange={(e) => {
-              setPass(e.target.value)
-              setError("")
-            }}
-            className="w-full bg-white/[0.04] border border-white/10 focus:border-white/30 text-white placeholder-white/25 px-4 py-3.5 rounded-xl outline-none text-sm transition-all"
-          />
-        </div>
+        <input
+          type="password"
+          placeholder="New password"
+          value={pass}
+          onChange={(e) => {
+            setPass(e.target.value)
+            setError("")
+          }}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          className="w-full bg-white/[0.04] border border-white/10 focus:border-white/30 text-white placeholder-white/25 px-4 py-3.5 rounded-xl outline-none text-sm transition-all"
+        />
 
-        {/* Strength bar */}
         {pass.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="flex gap-1 flex-1">
@@ -139,6 +128,7 @@ export const SetupPasswordScreen: React.FC<Props> = ({
             setConfirm(e.target.value)
             setError("")
           }}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           className="w-full bg-white/[0.04] border border-white/10 focus:border-white/30 text-white placeholder-white/25 px-4 py-3.5 rounded-xl outline-none text-sm transition-all"
         />
       </div>
@@ -153,11 +143,10 @@ export const SetupPasswordScreen: React.FC<Props> = ({
           </p>
         </div>
         <button
-          onKeyDown={(e: React.KeyboardEvent) =>
-            e.key === "Enter" && handleSubmit()
-          }
-          className="w-full py-3.5 bg-white text-black font-bold rounded-xl text-sm tracking-wide hover:bg-white/90 transition-all active:scale-[0.98]">
-          CONTINUE
+          onClick={handleSubmit}
+          disabled={loading || !pass || !confirm}
+          className="w-full py-3.5 bg-white text-black font-bold rounded-xl text-sm tracking-wide hover:bg-white/90 transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed">
+          {loading ? "SETTING UP..." : "CONTINUE"}
         </button>
       </div>
     </div>

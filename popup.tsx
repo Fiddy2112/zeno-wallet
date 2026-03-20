@@ -18,15 +18,21 @@ import "./src/style.css"
 
 import { ToastContainer } from "react-toastify"
 
+import { BuyScreen } from "~screens/BuyScreen"
+import { TransactionHistoryScreen } from "~screens/Transactionhistoryscreen"
+
 const MAIN_SCREENS: Screen[] = [
   "dashboard",
   "send",
   "receive",
   "swap",
+  "buy",
   "ai",
   "settings",
-  "unlock"
+  "unlock",
+  "history"
 ]
+
 const BOTTOM_NAV_SCREENS: Screen[] = [
   "dashboard",
   "send",
@@ -41,9 +47,7 @@ function IndexPopup() {
   const [password, setPassword] = useState("")
   const [flow, setFlow] = useState<"create" | "import">("create")
   const [importedPhrase, setImportedPhrase] = useState("")
-  // unlock screen
   const [isUnlocked, setIsUnlocked] = useState(false)
-  const [autoLock, setAutoLock] = useState("1")
 
   const handleSetProMode = (value: boolean) => {
     setProMode(value)
@@ -64,7 +68,7 @@ function IndexPopup() {
 
         if (res.zeno_onboarded) {
           setProMode(res.zeno_pro_mode || false)
-          // Check time limit
+
           const limitValue = res.zeno_lock_limit || "15"
           const lockLimit =
             limitValue === "never" ? Infinity : parseInt(limitValue)
@@ -75,17 +79,13 @@ function IndexPopup() {
           const now = Date.now()
           const diffInMinutes = (now - lastActive) / (1000 * 60)
 
-          // If expired -> Unlock Screen
           if (lockLimit !== Infinity && diffInMinutes > lockLimit) {
             setScreen("unlock")
           } else {
-            // Within time limit or session active
             setScreen("dashboard")
-            // Also set isUnlocked to true so we don't keep checking
             setIsUnlocked(true)
           }
 
-          // Update timestamp to now while popup is open
           await chrome.storage.local.set({
             zeno_timestamp: new Date().toISOString()
           })
@@ -95,11 +95,9 @@ function IndexPopup() {
       }
     }
     initApp()
-  }, []) // Run once on mount
+  }, [])
 
-  const isMainApp = MAIN_SCREENS.includes(screen)
   const showNav = (BOTTOM_NAV_SCREENS as string[]).includes(screen as string)
-
   const activeTab = (
     BOTTOM_NAV_SCREENS.includes(screen) ? screen : "dashboard"
   ) as Tab
@@ -147,6 +145,8 @@ function IndexPopup() {
         return <ReceiveScreen setScreen={setScreen} />
       case "swap":
         return <SwapScreen setScreen={setScreen} proMode={proMode} />
+      case "buy":
+        return <BuyScreen setScreen={setScreen} />
       case "ai":
         return <AIGuardianScreen setScreen={setScreen} />
       case "settings":
@@ -161,6 +161,8 @@ function IndexPopup() {
         return (
           <UnlockScreen setScreen={setScreen} setIsUnlocked={setIsUnlocked} />
         )
+      case "history":
+        return <TransactionHistoryScreen setScreen={setScreen} />
       default:
         return <WelcomeScreen setScreen={setScreen} />
     }
@@ -178,16 +180,13 @@ function IndexPopup() {
         overflow: "hidden"
       }}
       className="w-[360px] h-[580px] bg-[#080808] text-white flex flex-col overflow-hidden relative">
-      {/* Ambient background blobs */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-20 -left-20 w-48 h-48 bg-white/[0.015] blur-[80px] rounded-full" />
         <div className="absolute bottom-20 right-0 w-40 h-40 bg-white/[0.01] blur-[60px] rounded-full" />
       </div>
-      {/* Screen content */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10 min-h-0">
         {renderScreen()}
       </div>
-      {/* Bottom navigation */}
       {showNav && (
         <div className="flex-shrink-0 z-20 relative">
           <BottomNav active={activeTab} setScreen={setScreen} />
