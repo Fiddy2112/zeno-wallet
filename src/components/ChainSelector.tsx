@@ -1,38 +1,56 @@
-import { Check, ChevronDown, Globe } from "lucide-react"
-import { useState } from "react"
+import { ChevronDown, FlaskConical, Globe } from "lucide-react"
+import { useEffect, useState } from "react"
 
 import { SUPPORTED_CHAINS } from "~core/networks"
+import type { CustomNetwork } from "~components/AddNetworkModal"
+import { NetworkSheet, type ChainFilter } from "~components/NetworkSheet"
 
-export type ChainFilter = "all" | string
+export type { ChainFilter }
 
 interface Props {
   selected: ChainFilter
   onChange: (v: ChainFilter) => void
 }
 
-export const EVM_CHAINS = SUPPORTED_CHAINS.filter(
+const TESTNETS = ["sepolia", "goerli"]
+
+export const ALL_EVM_CHAINS = SUPPORTED_CHAINS.filter(
   (c) => c.vmType === "EVM" && c.id !== "solana" && c.id !== "bitcoin"
 )
 
+export const EVM_CHAINS = ALL_EVM_CHAINS.filter((c) => !TESTNETS.includes(c.id))
+
+// Full ChainSelector
+
 export const ChainSelector: React.FC<Props> = ({ selected, onChange }) => {
   const [open, setOpen] = useState(false)
+  const [showTestnet, setShowTestnet] = useState(false)
+  const [customNetworks, setCustomNetworks] = useState<CustomNetwork[]>([])
 
-  const currentChain = EVM_CHAINS.find((c) => c.id === selected)
-  const label =
-    selected === "all" ? "All networks" : currentChain?.name || "All networks"
-  const logo = selected === "all" ? null : currentChain?.logo
+  useEffect(() => {
+    chrome.storage.local.get(["zeno_show_testnet", "zeno_custom_networks"], (res) => {
+      setShowTestnet(res.zeno_show_testnet || false)
+      setCustomNetworks(res.zeno_custom_networks || [])
+    })
+    const listener = (changes: any) => {
+      if (changes.zeno_show_testnet !== undefined) setShowTestnet(changes.zeno_show_testnet.newValue || false)
+      if (changes.zeno_custom_networks !== undefined) setCustomNetworks(changes.zeno_custom_networks.newValue || [])
+    }
+    chrome.storage.onChanged.addListener(listener)
+    return () => chrome.storage.onChanged.removeListener(listener)
+  }, [])
 
-  const handleChange = (v: ChainFilter) => {
-    onChange(v)
-    // Persist so ReceiveScreen can read it
-    chrome.storage.local.set({ zeno_chain_filter: v })
-    setOpen(false)
-  }
+  const builtinChain = ALL_EVM_CHAINS.find((c) => c.id === selected)
+  const customChain = customNetworks.find((n) => n.id === selected)
+  const isTestnet = builtinChain ? TESTNETS.includes(builtinChain.id) : false
+  const label = selected === "all" ? "All networks" : builtinChain?.name || customChain?.name || "All networks"
+  const logo = selected === "all" ? null : builtinChain?.logo || customChain?.logo || null
 
   return (
-    <div className="relative" id="tour-network">
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
+        id="tour-network"
+        onClick={() => setOpen(true)}
         className="flex items-center gap-1.5 glass px-2.5 py-1 rounded-full hover:bg-white/[0.08] transition-all">
         {logo ? (
           <img src={logo} alt={label} className="w-3.5 h-3.5 rounded-full" />
@@ -42,55 +60,78 @@ export const ChainSelector: React.FC<Props> = ({ selected, onChange }) => {
         <span className="text-white/60 text-[10px] font-mono leading-6 max-w-[72px] truncate">
           {label}
         </span>
-        <ChevronDown
-          className={`w-3 h-3 text-white/30 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        {isTestnet && <FlaskConical className="w-2.5 h-2.5 text-yellow-400/70" />}
+        <ChevronDown className="w-3 h-3 text-white/30" />
+      </button>
+      {open && (
+        <NetworkSheet
+          selected={selected}
+          onChange={onChange}
+          onClose={() => setOpen(false)}
+          customNetworks={customNetworks}
+          showTestnet={showTestnet}
         />
+      )}
+    </>
+  )
+}
+
+// Compact variant for Dashboard top bar
+
+export const ChainSelectorCompact: React.FC<Props> = ({ selected, onChange }) => {
+  const [open, setOpen] = useState(false)
+  const [showTestnet, setShowTestnet] = useState(false)
+  const [customNetworks, setCustomNetworks] = useState<CustomNetwork[]>([])
+
+  useEffect(() => {
+    chrome.storage.local.get(["zeno_show_testnet", "zeno_custom_networks"], (res) => {
+      setShowTestnet(res.zeno_show_testnet || false)
+      setCustomNetworks(res.zeno_custom_networks || [])
+    })
+    const listener = (changes: any) => {
+      if (changes.zeno_show_testnet !== undefined) setShowTestnet(changes.zeno_show_testnet.newValue || false)
+      if (changes.zeno_custom_networks !== undefined) setCustomNetworks(changes.zeno_custom_networks.newValue || [])
+    }
+    chrome.storage.onChanged.addListener(listener)
+    return () => chrome.storage.onChanged.removeListener(listener)
+  }, [])
+
+  const builtinChain = ALL_EVM_CHAINS.find((c) => c.id === selected)
+  const customChain = customNetworks.find((n) => n.id === selected)
+  const isTestnet = builtinChain ? TESTNETS.includes(builtinChain.id) : false
+  const fullName = builtinChain?.name || customChain?.name || ""
+  const logo = selected === "all" ? null : builtinChain?.logo || customChain?.logo || null
+
+  // Short label: "All" or chain name truncated to ~8 chars
+  const shortLabel = selected === "all" ? "All" : fullName.split(" ")[0] // "Ethereum", "Arbitrum", "Base"...
+
+  return (
+    <>
+      <button
+        id="tour-network"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 glass px-2 py-1 rounded-full hover:bg-white/[0.08] transition-all max-w-[88px]">
+        {logo ? (
+          <img src={logo} alt={fullName} className="w-3.5 h-3.5 rounded-full flex-shrink-0" />
+        ) : (
+          <Globe className="w-3 h-3 text-white/40 flex-shrink-0" />
+        )}
+        <span className="text-white/60 text-[10px] font-mono leading-6 truncate">
+          {shortLabel}
+        </span>
+        {isTestnet && <FlaskConical className="w-2.5 h-2.5 text-yellow-400/70 flex-shrink-0" />}
+        <ChevronDown className="w-2.5 h-2.5 text-white/30 flex-shrink-0" />
       </button>
 
       {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute top-full right-0 mt-2 w-48 bg-[#181818] border border-white/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.6)] z-40 overflow-hidden animate-fade-in py-1">
-            <button
-              onClick={() => handleChange("all")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs transition-colors ${selected === "all" ? "text-white bg-white/[0.07]" : "text-white/50 hover:bg-white/[0.05] hover:text-white/80"}`}>
-              <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                <Globe className="w-3.5 h-3.5 text-white/50" />
-              </div>
-              <span className="font-medium flex-1 text-left">All networks</span>
-              {selected === "all" && (
-                <Check className="w-3 h-3 text-emerald-400" />
-              )}
-            </button>
-
-            <div className="h-px bg-white/5 mx-3 my-1" />
-
-            {EVM_CHAINS.map((chain) => (
-              <button
-                key={chain.id}
-                onClick={() => handleChange(chain.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs transition-colors ${selected === chain.id ? "text-white bg-white/[0.07]" : "text-white/50 hover:bg-white/[0.05] hover:text-white/80"}`}>
-                <img
-                  src={chain.logo}
-                  alt={chain.name}
-                  className="w-6 h-6 rounded-full bg-black/50 flex-shrink-0"
-                />
-                <div className="flex flex-col items-start flex-1 min-w-0">
-                  <span className="font-medium truncate w-full text-left">
-                    {chain.name}
-                  </span>
-                  <span className="text-[9px] text-white/25 font-mono">
-                    {chain.nativeSymbol}
-                  </span>
-                </div>
-                {selected === chain.id && (
-                  <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                )}
-              </button>
-            ))}
-          </div>
-        </>
+        <NetworkSheet
+          selected={selected}
+          onChange={onChange}
+          onClose={() => setOpen(false)}
+          customNetworks={customNetworks}
+          showTestnet={showTestnet}
+        />
       )}
-    </div>
+    </>
   )
 }

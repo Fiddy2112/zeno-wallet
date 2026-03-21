@@ -7,19 +7,20 @@ import {
 } from "lucide-react"
 import { useEffect, useState } from "react"
 
-import { ChainSelector, type ChainFilter } from "~components/ChainSelector"
+import { ChainSelectorCompact, type ChainFilter } from "~components/ChainSelector"
 import { IdentityHub } from "~components/IdentityHub"
+import { NotificationBell } from "~components/NotificationBell"
 import { TokenCard } from "~components/TokenCard"
 import { SUPPORTED_CHAINS } from "~core/networks"
 import { askZeno } from "~features/ai-service"
-import { notify } from "~features/notifications"
+import { checkBalanceChanges, notify } from "~features/notifications"
 import { getCachedPriceWithChange } from "~features/price-cache"
+import { useDashboardTour } from "~hooks/useDashboardTour"
 import {
   addNextAccount,
   importExternalAccount,
   removeAccount
 } from "~features/wallet-logic"
-import { useDashboardTour } from "~hooks/useDashboardTour"
 import { useNetworkPortfolio } from "~hooks/usePortfolio"
 import { mapToToken, type Screen } from "~types"
 
@@ -48,13 +49,11 @@ export const DashboardScreen: React.FC<Props> = ({
 
   const { networkGroups, isLoading } = useNetworkPortfolio(address)
 
-  // Filter groups by selected chain
   const filteredGroups =
     chainFilter === "all"
       ? networkGroups
       : networkGroups.filter((g) => g.chainId === chainFilter)
 
-  // Total shows filtered value
   const totalUsdValue =
     filteredGroups?.reduce((sum, g) => sum + (g.totalUsd || 0), 0) || 0
   const totalUsdStr = totalUsdValue.toLocaleString("en-US", {
@@ -65,8 +64,9 @@ export const DashboardScreen: React.FC<Props> = ({
 
   const activeChain = networkGroups[0]?.chainId || "ethereum"
   const coingeckoId =
-    SUPPORTED_CHAINS.find((c) => c.id === activeChain)?.coingeckoId ||
-    "ethereum"
+    SUPPORTED_CHAINS.find((c) => c.id === activeChain)?.coingeckoId || "ethereum"
+
+  const selectedChainName = SUPPORTED_CHAINS.find((c) => c.id === chainFilter)?.name
 
   useEffect(() => {
     shouldAutoStart().then((should) => {
@@ -79,15 +79,11 @@ export const DashboardScreen: React.FC<Props> = ({
 
   useEffect(() => {
     const loadAccounts = async () => {
-      const res = await chrome.storage.local.get([
-        "zeno_accounts",
-        "zeno_address"
-      ])
+      const res = await chrome.storage.local.get(["zeno_accounts", "zeno_address","zeno_chain_filter"])
       if (res.zeno_address) setAddress(res.zeno_address)
+      if (res.zeno_chain_filter) setChainFilter(res.zeno_chain_filter)
       if (!res.zeno_accounts && res.zeno_address) {
-        const initial = [
-          { name: "Account 1", address: res.zeno_address, index: 0 }
-        ]
+        const initial = [{ name: "Account 1", address: res.zeno_address, index: 0 }]
         setAccounts(initial)
         await chrome.storage.local.set({ zeno_accounts: initial })
       } else {
@@ -96,6 +92,14 @@ export const DashboardScreen: React.FC<Props> = ({
     }
     loadAccounts()
   }, [])
+
+  // Check balance changes on wallet open — creates in-app notifications
+  useEffect(() => {
+    if (!address || isLoading || networkGroups.length === 0) return
+    const balanceMap: Record<string, number> = {}
+    networkGroups.forEach((g) => { balanceMap[g.chainId] = g.totalUsd })
+    checkBalanceChanges(address, balanceMap)
+  }, [address, isLoading])
 
   useEffect(() => {
     const fetchMarket = async () => {
@@ -118,8 +122,7 @@ export const DashboardScreen: React.FC<Props> = ({
       })
       if (result.intent === "SEND") {
         notify.success(result.ai_response, "dark", 3000)
-        if (result.params)
-          await chrome.storage.local.set({ pending_tx: result.params })
+        if (result.params) await chrome.storage.local.set({ pending_tx: result.params })
         setScreen("send")
       } else {
         notify.info(result.ai_response, "dark", 3000)
@@ -146,11 +149,7 @@ export const DashboardScreen: React.FC<Props> = ({
     }
   }
 
-  const handleImportIdentity = async (
-    type: "key" | "mnemonic",
-    value: string,
-    name: string
-  ) => {
+  const handleImportIdentity = async (type: "key" | "mnemonic", value: string, name: string) => {
     try {
       const updated = await importExternalAccount(type, value, name)
       setAccounts(updated)
@@ -163,21 +162,15 @@ export const DashboardScreen: React.FC<Props> = ({
 
   const handleRemoveIdentity = async (addrToRemove: string) => {
     try {
-      const { updatedAccounts, newActiveAddress } =
-        await removeAccount(addrToRemove)
+      const { updatedAccounts, newActiveAddress } = await removeAccount(addrToRemove)
       setAccounts(updatedAccounts)
-      if (address.toLowerCase() === addrToRemove.toLowerCase())
-        setAddress(newActiveAddress)
+      if (address.toLowerCase() === addrToRemove.toLowerCase()) setAddress(newActiveAddress)
       notify.success("Account removed successfully!", "dark", 3000)
     } catch (error: any) {
       notify.error(error.message || "Failed to remove account.", "dark", 3000)
       throw error
     }
   }
-
-  const selectedChainName = SUPPORTED_CHAINS.find(
-    (c) => c.id === chainFilter
-  )?.name
 
   return (
     <>
@@ -198,9 +191,12 @@ export const DashboardScreen: React.FC<Props> = ({
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden h-full">
-        {/* Top Bar */}
-        <div className="flex items-center gap-2 justify-between px-4 pt-4 pb-2 flex-shrink-0">
-          <div className="flex items-center gap-2">
+
+        {/* ── Top Bar — compact fit in 360px ── */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
+
+          {/* LEFT: Z logo + address pill */}
+          <div className="flex items-center gap-1.5">
             <div
               id="tour-logo"
               className="w-6 h-6 bg-white rounded flex items-center justify-center font-black text-black italic text-xs flex-shrink-0">
@@ -209,27 +205,35 @@ export const DashboardScreen: React.FC<Props> = ({
             <button
               id="tour-address"
               onClick={() => setShowHub(true)}
-              className="flex items-center gap-1.5 glass px-2.5 py-1 rounded-full hover:bg-white/[0.08] transition-all leading-6">
-              <span className="text-white/70 text-xs font-mono">
-                {address ? short(address) : "Loading..."}
+              className="flex items-center gap-1 glass px-2 py-1 rounded-full hover:bg-white/[0.08] transition-all">
+              <span className="text-white/70 text-[10px] font-mono">
+                {address ? short(address) : "..."}
               </span>
-              <ChevronDown className="w-3 h-3 text-white/30" />
+              <ChevronDown className="w-2.5 h-2.5 text-white/30" />
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ChainSelector selected={chainFilter} onChange={setChainFilter} />
+          {/* RIGHT: chain + bell + tour + mode */}
+          <div className="flex items-center gap-1.5">
+            {/* Compact chain selector — "All" or "Ethereum", "Base"... */}
+            <ChainSelectorCompact selected={chainFilter} onChange={setChainFilter} />
 
+            {/* Notification bell with unread badge */}
+            <NotificationBell />
+
+            {/* Tour hint — small, low priority */}
             <button
               onClick={startTour}
-              title="Start guided tour"
+              title="Start tour"
               className="w-6 h-6 flex items-center justify-center text-white/20 hover:text-white/60 transition-colors text-xs rounded-full border border-white/10 hover:border-white/25">
               ?
             </button>
+
+            {/* Pro / Lite toggle */}
             <button
               id="tour-mode-toggle"
               onClick={() => setProMode(!proMode)}
-              className={`text-[10px] font-bold px-2.5 py-1 rounded-full transition-all ${
+              className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${
                 proMode
                   ? "bg-white text-black"
                   : "border border-white/20 text-white/50 hover:border-white/40"
@@ -242,22 +246,14 @@ export const DashboardScreen: React.FC<Props> = ({
         {/* Total Balance */}
         <div id="tour-balance" className="px-4 py-4 text-center flex-shrink-0">
           <p className="text-white/30 text-xs uppercase tracking-widest mb-1">
-            {chainFilter === "all"
-              ? "Total Net Worth"
-              : `${selectedChainName} Balance`}
+            {chainFilter === "all" ? "Total Net Worth" : `${selectedChainName} Balance`}
           </p>
           <h2 className="text-4xl font-black text-white tracking-tight mb-1">
             {isLoading ? "..." : `$${totalUsdStr}`}
           </h2>
           <div className="flex flex-col items-center gap-1">
-            <span
-              className={
-                isPositive
-                  ? "text-emerald-400 text-xs font-semibold"
-                  : "text-red-400 text-xs font-semibold"
-              }>
-              {isPositive ? "+" : ""}
-              {marketData.change24h.toFixed(2)}% Market (24h)
+            <span className={isPositive ? "text-emerald-400 text-xs font-semibold" : "text-red-400 text-xs font-semibold"}>
+              {isPositive ? "+" : ""}{marketData.change24h.toFixed(2)}% Market (24h)
             </span>
           </div>
 
@@ -268,11 +264,7 @@ export const DashboardScreen: React.FC<Props> = ({
                 onChange={(e) => setAiInput(e.target.value)}
                 onKeyDown={handleAIInput}
                 disabled={isAiProcessing}
-                placeholder={
-                  isAiProcessing
-                    ? "AI is thinking..."
-                    : "Ask Zeno: 'Send 0.01 eth to 0x...' "
-                }
+                placeholder={isAiProcessing ? "AI is thinking..." : "Ask Zeno: 'Send 0.01 eth to 0x...' "}
                 className="bg-transparent w-full text-xs text-white placeholder-white/20 outline-none"
               />
             </div>
@@ -281,119 +273,70 @@ export const DashboardScreen: React.FC<Props> = ({
           {proMode && (
             <div className="mt-3 inline-flex items-center gap-2 glass px-3 py-1.5 rounded-full">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-glow" />
-              <span className="text-white/60 text-[10px] font-medium">
-                AI Risk Score:
-              </span>
-              <span className="text-emerald-400 text-[10px] font-bold">
-                LOW — Safe to transact
-              </span>
+              <span className="text-white/60 text-[10px] font-medium">AI Risk Score:</span>
+              <span className="text-emerald-400 text-[10px] font-bold">LOW — Safe to transact</span>
             </div>
           )}
         </div>
 
         {/* Actions */}
-        <div
-          id="tour-actions"
-          className="flex justify-center gap-6 px-4 pb-4 flex-shrink-0">
+        <div id="tour-actions" className="flex justify-center gap-6 px-4 pb-4 flex-shrink-0">
           {[
-            {
-              label: "Send",
-              icon: <ArrowUpRight className="w-5 h-5 text-emerald-400" />,
-              action: () => setScreen("send")
-            },
-            {
-              label: "Receive",
-              icon: <ArrowDownLeft className="w-5 h-5 text-emerald-400" />,
-              action: () => setScreen("receive")
-            },
-            {
-              label: "Swap",
-              icon: <Repeat className="w-5 h-5 text-emerald-400" />,
-              action: () => setScreen("swap")
-            },
-            {
-              label: "Buy",
-              icon: <Plus className="w-5 h-5 text-emerald-400" />,
-              action: () => setScreen("buy")
-            }
+            { label: "Send",    icon: <ArrowUpRight className="w-5 h-5 text-emerald-400" />,  action: () => setScreen("send") },
+            { label: "Receive", icon: <ArrowDownLeft className="w-5 h-5 text-emerald-400" />, action: () => setScreen("receive") },
+            { label: "Swap",    icon: <Repeat className="w-5 h-5 text-emerald-400" />,         action: () => setScreen("swap") },
+            { label: "Buy",     icon: <Plus className="w-5 h-5 text-emerald-400" />,           action: () => setScreen("buy") }
           ].map((a) => (
-            <button
-              key={a.label}
-              onClick={a.action}
-              className="flex flex-col items-center gap-1.5 group">
+            <button key={a.label} onClick={a.action} className="flex flex-col items-center gap-1.5 group">
               <div className="w-11 h-11 glass rounded-2xl flex items-center justify-center text-white text-base hover:bg-white/[0.1] transition-all active:scale-95">
                 {a.icon}
               </div>
-              <span className="text-white/40 text-[10px] group-hover:text-white/70 transition-colors">
-                {a.label}
-              </span>
+              <span className="text-white/40 text-[10px] group-hover:text-white/70 transition-colors">{a.label}</span>
             </button>
           ))}
         </div>
 
         {/* Portfolio List */}
-        <div
-          id="tour-assets"
-          className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
+        <div id="tour-assets" className="flex-1 overflow-y-auto px-2 pb-2 custom-scrollbar">
           <div className="flex items-center justify-between px-3 pb-2">
-            <span className="text-white/30 text-[10px] uppercase tracking-widest">
-              Portfolio
-            </span>
-            {proMode && (
-              <span className="text-white/30 text-[10px] uppercase tracking-widest">
-                Alpha mode
-              </span>
-            )}
+            <span className="text-white/30 text-[10px] uppercase tracking-widest">Portfolio</span>
+            {proMode && <span className="text-white/30 text-[10px] uppercase tracking-widest">Alpha mode</span>}
           </div>
 
           {isLoading ? (
-            <div className="text-center text-white/30 text-xs py-8 animate-pulse">
-              Scanning multi-chain nexus...
-            </div>
+            <div className="text-center text-white/30 text-xs py-8 animate-pulse">Scanning multi-chain nexus...</div>
           ) : filteredGroups.length > 0 ? (
             filteredGroups.map((group) => (
               <div key={group.chainId} className="mb-6 animate-fade-in">
-                {/* Chain header — hidden when filtered to single chain */}
                 {chainFilter === "all" && (
                   <div className="flex items-center justify-between px-3 mb-2">
                     <div className="flex items-center gap-2">
-                      <img
-                        src={group.chainLogo}
-                        alt={group.chainName}
-                        className="w-4 h-4 rounded-full"
-                        loading="lazy"
-                      />
-                      <span className="text-white/60 text-[10px] font-bold tracking-wider uppercase">
-                        {group.chainName}
-                      </span>
+                      <img src={group.chainLogo} alt={group.chainName} className="w-4 h-4 rounded-full" loading="lazy" />
+                      <span className="text-white/60 text-[10px] font-bold tracking-wider uppercase">{group.chainName}</span>
                     </div>
                     <span className="text-white/40 text-[10px] font-mono">
-                      $
-                      {group.totalUsd.toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      })}
+                      ${group.totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 )}
                 <div className="space-y-1">
-                  {group.tokens.map((token, index) => (
-                    <TokenCard
-                      key={
-                        token.address ||
-                        `${group.chainId}-${token.symbol}-${index}`
-                      }
-                      token={mapToToken(token)}
-                    />
-                  ))}
+                  {group.tokens.map((token, index) => {
+                    const chainConfig = SUPPORTED_CHAINS.find((c) => c.id === group.chainId)
+                    const mapped = mapToToken(token, chainConfig?.coingeckoId)
+                    return (
+                      <TokenCard
+                        key={token.address || `${group.chainId}-${token.symbol}-${index}`}
+                        token={mapped}
+                        coingeckoId={mapped.coingeckoId}
+                      />
+                    )
+                  })}
                 </div>
               </div>
             ))
           ) : (
             <div className="text-center text-white/20 text-xs py-8">
-              {chainFilter === "all"
-                ? "No assets found across networks."
-                : `No assets on ${selectedChainName || "this network"}.`}
+              {chainFilter === "all" ? "No assets found across networks." : `No assets on ${selectedChainName || "this network"}.`}
             </div>
           )}
         </div>

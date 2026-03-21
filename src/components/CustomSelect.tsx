@@ -60,9 +60,9 @@ export const CustomSelect: React.FC<Props> = ({
       {open && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-[30]" onClick={() => setOpen(false)} />
 
-          <div className="absolute top-full right-0 mt-2 min-w-[160px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.7)] z-40 overflow-hidden py-1 animate-fade-in">
+          <div className="absolute top-full right-0 mt-2 min-w-[160px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.7)] z-[9999] custom-scrollbar overflow-hidden py-1 animate-fade-in">
             {options.map((opt) => {
               const isSelected = opt.value === value
               return (

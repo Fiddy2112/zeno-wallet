@@ -15,6 +15,7 @@ export type TokenInfo = {
   symbol: string
   address: string
   balance: number
+  change?: number
   price: number
   usdValue: number
   logo?: string
@@ -52,8 +53,8 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
         const coingeckoIds = Array.from(
           new Set(SUPPORTED_CHAINS.map((c) => c.coingeckoId))
         ).join(",")
-        const prices: Record<string, { usd: number }> = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds}&vs_currencies=usd`,
+        const prices: Record<string, { usd: number; usd_24h_change: number }> = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds}&vs_currencies=usd&include_24hr_change=true`,
           { signal: controller.signal }
         ).then((r) => r.json())
 
@@ -82,7 +83,8 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                   balance: nativeBalanceNum,
                   price: nativePrice,
                   usdValue,
-                  logo: chain.logo
+                  logo: chain.logo,
+                  change: prices[chain.coingeckoId]?.usd_24h_change ?? 0
                 })
               }
 
@@ -159,14 +161,15 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                     const p = priceData[t.address]?.usd || 0
                     t.price = p
                     t.usdValue = t.balance * p
+                    if(t.usdValue > 0) totalUsd += t.usdValue
                   })
-
-                  const valuable = erc20Tokens.filter((t) => t.usdValue > 0.01)
-                  valuable.forEach((t) => {
-                    totalUsd += t.usdValue
-                  })
-                  tokens.push(...valuable)
                 }
+
+                const withPrice = erc20Tokens.filter((t)=> t.usdValue > 0).sort((a,b)=> b.usdValue - a.usdValue)
+                const withoutPrice = erc20Tokens
+                  .filter((t) => t.usdValue === 0)
+                  .sort((a, b) => b.balance - a.balance)
+                tokens.push(...withPrice, ...withoutPrice)
               }
 
               if (!tokens.length) return null
@@ -175,7 +178,7 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                 chainName: chain.name,
                 chainLogo: chain.logo,
                 totalUsd,
-                tokens: tokens.sort((a, b) => b.usdValue - a.usdValue)
+                tokens
               }
             } catch {
               return null
