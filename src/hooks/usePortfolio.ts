@@ -40,9 +40,6 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
       setNetworkGroups([])
       return
     }
-
-    let cancelled = false
-
     const controller = new AbortController()
 
     async function fetchPortfolio() {
@@ -152,7 +149,7 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                 if (platform && erc20Tokens.length) {
                   const addresses = erc20Tokens.map((t) => t.address).join(",")
                   const priceData = await fetch(
-                    `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${addresses}&vs_currencies=usd`
+                    `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${addresses}&vs_currencies=usd&include_24hr_change=true`
                   )
                     .then((r) => r.json())
                     .catch(() => ({}))
@@ -161,6 +158,7 @@ export const useNetworkPortfolio = (walletAddress?: string) => {
                     const p = priceData[t.address]?.usd || 0
                     t.price = p
                     t.usdValue = t.balance * p
+                    t.change = priceData[t.address]?.usd_24h_change ?? 0
                     if(t.usdValue > 0) totalUsd += t.usdValue
                   })
                 }

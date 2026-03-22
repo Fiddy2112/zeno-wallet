@@ -2,6 +2,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   ChevronDown,
+  ChevronUp,
   Plus,
   Repeat
 } from "lucide-react"
@@ -10,6 +11,7 @@ import { useEffect, useState } from "react"
 import { ChainSelectorCompact, type ChainFilter } from "~components/ChainSelector"
 import { IdentityHub } from "~components/IdentityHub"
 import { NotificationBell } from "~components/NotificationBell"
+import { PortfolioChart, savePortfolioSnapshot } from "~components/PortfolioChart"
 import { TokenCard } from "~components/TokenCard"
 import { SUPPORTED_CHAINS } from "~core/networks"
 import { askZeno } from "~features/ai-service"
@@ -40,6 +42,7 @@ export const DashboardScreen: React.FC<Props> = ({
   const { startTour, shouldAutoStart } = useDashboardTour()
 
   const [showHub, setShowHub] = useState(false)
+  const [showChart, setShowChart] = useState(false)
   const [accounts, setAccounts] = useState<any[]>([])
   const [address, setAddress] = useState<string>("")
   const [aiInput, setAiInput] = useState("")
@@ -65,7 +68,6 @@ export const DashboardScreen: React.FC<Props> = ({
   const activeChain = networkGroups[0]?.chainId || "ethereum"
   const coingeckoId =
     SUPPORTED_CHAINS.find((c) => c.id === activeChain)?.coingeckoId || "ethereum"
-
   const selectedChainName = SUPPORTED_CHAINS.find((c) => c.id === chainFilter)?.name
 
   useEffect(() => {
@@ -79,7 +81,11 @@ export const DashboardScreen: React.FC<Props> = ({
 
   useEffect(() => {
     const loadAccounts = async () => {
-      const res = await chrome.storage.local.get(["zeno_accounts", "zeno_address","zeno_chain_filter"])
+      const res = await chrome.storage.local.get([
+        "zeno_accounts",
+        "zeno_address",
+        "zeno_chain_filter"
+      ])
       if (res.zeno_address) setAddress(res.zeno_address)
       if (res.zeno_chain_filter) setChainFilter(res.zeno_chain_filter)
       if (!res.zeno_accounts && res.zeno_address) {
@@ -93,13 +99,21 @@ export const DashboardScreen: React.FC<Props> = ({
     loadAccounts()
   }, [])
 
-  // Check balance changes on wallet open — creates in-app notifications
+  // Save snapshot + check balance changes when portfolio loads
   useEffect(() => {
     if (!address || isLoading || networkGroups.length === 0) return
+
     const balanceMap: Record<string, number> = {}
     networkGroups.forEach((g) => { balanceMap[g.chainId] = g.totalUsd })
+
+    // Save portfolio snapshot for chart
+    if (totalUsdValue > 0) {
+      savePortfolioSnapshot(address, totalUsdValue)
+    }
+
+    // Check for balance changes → notifications
     checkBalanceChanges(address, balanceMap)
-  }, [address, isLoading])
+  }, [address, isLoading, totalUsdValue])
 
   useEffect(() => {
     const fetchMarket = async () => {
@@ -149,7 +163,11 @@ export const DashboardScreen: React.FC<Props> = ({
     }
   }
 
-  const handleImportIdentity = async (type: "key" | "mnemonic", value: string, name: string) => {
+  const handleImportIdentity = async (
+    type: "key" | "mnemonic",
+    value: string,
+    name: string
+  ) => {
     try {
       const updated = await importExternalAccount(type, value, name)
       setAccounts(updated)
@@ -164,7 +182,8 @@ export const DashboardScreen: React.FC<Props> = ({
     try {
       const { updatedAccounts, newActiveAddress } = await removeAccount(addrToRemove)
       setAccounts(updatedAccounts)
-      if (address.toLowerCase() === addrToRemove.toLowerCase()) setAddress(newActiveAddress)
+      if (address.toLowerCase() === addrToRemove.toLowerCase())
+        setAddress(newActiveAddress)
       notify.success("Account removed successfully!", "dark", 3000)
     } catch (error: any) {
       notify.error(error.message || "Failed to remove account.", "dark", 3000)
@@ -192,10 +211,8 @@ export const DashboardScreen: React.FC<Props> = ({
 
       <div className="flex-1 flex flex-col overflow-hidden h-full">
 
-        {/* ── Top Bar — compact fit in 360px ── */}
+        {/* Top Bar */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
-
-          {/* LEFT: Z logo + address pill */}
           <div className="flex items-center gap-1.5">
             <div
               id="tour-logo"
@@ -213,23 +230,15 @@ export const DashboardScreen: React.FC<Props> = ({
             </button>
           </div>
 
-          {/* RIGHT: chain + bell + tour + mode */}
           <div className="flex items-center gap-1.5">
-            {/* Compact chain selector — "All" or "Ethereum", "Base"... */}
             <ChainSelectorCompact selected={chainFilter} onChange={setChainFilter} />
-
-            {/* Notification bell with unread badge */}
             <NotificationBell />
-
-            {/* Tour hint — small, low priority */}
             <button
               onClick={startTour}
               title="Start tour"
               className="w-6 h-6 flex items-center justify-center text-white/20 hover:text-white/60 transition-colors text-xs rounded-full border border-white/10 hover:border-white/25">
               ?
             </button>
-
-            {/* Pro / Lite toggle */}
             <button
               id="tour-mode-toggle"
               onClick={() => setProMode(!proMode)}
@@ -243,22 +252,40 @@ export const DashboardScreen: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Total Balance */}
-        <div id="tour-balance" className="px-4 py-4 text-center flex-shrink-0">
-          <p className="text-white/30 text-xs uppercase tracking-widest mb-1">
-            {chainFilter === "all" ? "Total Net Worth" : `${selectedChainName} Balance`}
-          </p>
-          <h2 className="text-4xl font-black text-white tracking-tight mb-1">
-            {isLoading ? "..." : `$${totalUsdStr}`}
-          </h2>
-          <div className="flex flex-col items-center gap-1">
-            <span className={isPositive ? "text-emerald-400 text-xs font-semibold" : "text-red-400 text-xs font-semibold"}>
-              {isPositive ? "+" : ""}{marketData.change24h.toFixed(2)}% Market (24h)
-            </span>
-          </div>
+        {/* Balance + Chart toggle */}
+        <div id="tour-balance" className="flex-shrink-0">
+          {/* Click balance area to toggle chart */}
+          <button
+            onClick={() => setShowChart((v) => !v)}
+            className="w-full px-4 pt-3 pb-2 text-center group">
+            <p className="text-white/30 text-xs uppercase tracking-widest mb-1">
+              {chainFilter === "all" ? "Total Net Worth" : `${selectedChainName} Balance`}
+            </p>
+            <h2 className="text-4xl font-black text-white tracking-tight mb-1 group-hover:text-white/90 transition-colors">
+              {isLoading ? "..." : `$${totalUsdStr}`}
+            </h2>
+            <div className="flex items-center justify-center gap-1.5">
+              <span className={isPositive ? "text-emerald-400 text-xs font-semibold" : "text-red-400 text-xs font-semibold"}>
+                {isPositive ? "+" : ""}{marketData.change24h.toFixed(2)}% Market (24h)
+              </span>
+              {/* Chart toggle hint */}
+              <span className="text-white/15 text-[10px]">
+                {showChart
+                  ? <ChevronUp className="w-3 h-3 inline" />
+                  : <ChevronDown className="w-3 h-3 inline" />}
+              </span>
+            </div>
+          </button>
+
+          {/* Portfolio Chart — slides in/out */}
+          {showChart && !isLoading && address && (
+            <div className="animate-fade-in">
+              <PortfolioChart address={address} currentValue={totalUsdValue} />
+            </div>
+          )}
 
           {proMode && (
-            <div className="mx-4 mt-2 bg-black/80 border border-white/5 p-3 rounded-2xl shadow-inner relative">
+            <div className="mx-4 mt-1 mb-2 bg-black/80 border border-white/5 p-3 rounded-2xl shadow-inner">
               <input
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
@@ -271,10 +298,12 @@ export const DashboardScreen: React.FC<Props> = ({
           )}
 
           {proMode && (
-            <div className="mt-3 inline-flex items-center gap-2 glass px-3 py-1.5 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-glow" />
-              <span className="text-white/60 text-[10px] font-medium">AI Risk Score:</span>
-              <span className="text-emerald-400 text-[10px] font-bold">LOW — Safe to transact</span>
+            <div className="flex justify-center mb-2">
+              <div className="inline-flex items-center gap-2 glass px-3 py-1.5 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-glow" />
+                <span className="text-white/60 text-[10px] font-medium">AI Risk Score:</span>
+                <span className="text-emerald-400 text-[10px] font-bold">LOW — Safe to transact</span>
+              </div>
             </div>
           )}
         </div>
@@ -288,7 +317,7 @@ export const DashboardScreen: React.FC<Props> = ({
             { label: "Buy",     icon: <Plus className="w-5 h-5 text-emerald-400" />,           action: () => setScreen("buy") }
           ].map((a) => (
             <button key={a.label} onClick={a.action} className="flex flex-col items-center gap-1.5 group">
-              <div className="w-11 h-11 glass rounded-2xl flex items-center justify-center text-white text-base hover:bg-white/[0.1] transition-all active:scale-95">
+              <div className="w-11 h-11 glass rounded-2xl flex items-center justify-center hover:bg-white/[0.1] transition-all active:scale-95">
                 {a.icon}
               </div>
               <span className="text-white/40 text-[10px] group-hover:text-white/70 transition-colors">{a.label}</span>
@@ -304,7 +333,9 @@ export const DashboardScreen: React.FC<Props> = ({
           </div>
 
           {isLoading ? (
-            <div className="text-center text-white/30 text-xs py-8 animate-pulse">Scanning multi-chain nexus...</div>
+            <div className="text-center text-white/30 text-xs py-8 animate-pulse">
+              Scanning multi-chain nexus...
+            </div>
           ) : filteredGroups.length > 0 ? (
             filteredGroups.map((group) => (
               <div key={group.chainId} className="mb-6 animate-fade-in">
@@ -336,7 +367,9 @@ export const DashboardScreen: React.FC<Props> = ({
             ))
           ) : (
             <div className="text-center text-white/20 text-xs py-8">
-              {chainFilter === "all" ? "No assets found across networks." : `No assets on ${selectedChainName || "this network"}.`}
+              {chainFilter === "all"
+                ? "No assets found across networks."
+                : `No assets on ${selectedChainName || "this network"}.`}
             </div>
           )}
         </div>
